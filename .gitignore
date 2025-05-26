@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.python-version
+venv/
+env/
+.env
+*.sqlite3
+db.sqlite3
+.idea/
+.vscode/
+
+# Django
+*.log
+*.pot
+*.pyc
+*.pyo
+*.pyd
+*.db
+*.sqlite3
+.coverage
+*.cover
+.hypothesis/
+.tox/
+.nox/
+.coverage.*
+*.log
+local_settings.py
+db.sqlite3
+
+# Flask
+instance/
+.env
+*.log
