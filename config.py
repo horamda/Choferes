@@ -1,7 +1,9 @@
+import os
+
 MYSQL_CONFIG = {
-    'host': '190.210.132.63',
-    'user': 'ht627842_pepe',
-    'password': 'Paisaje.2024*',
-    'database': 'ht627842_apichess'
+    'host': os.getenv('DB_HOST'),
+    'user': os.getenv('DB_USER'),
+    'password': os.getenv('DB_PASSWORD'),
+    'database': os.getenv('DB_NAME')
 }
 

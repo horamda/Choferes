@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: backend-choferes
+    env: python
+    startCommand: gunicorn app:app
+    envVars:
+      - key: DB_HOST
+        value: 190.210.132.63
+      - key: DB_USER
+        value: ht627842_pepe
+      - key: DB_PASSWORD
+        value: Paisaje.2024*
+      - key: DB_NAME
+        value: ht627842_apichess
