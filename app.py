@@ -3,6 +3,15 @@ from flask_cors import CORS
 from datetime import timedelta
 import mysql.connector
 from config import MYSQL_CONFIG
+import os
+from dotenv import load_dotenv
+load_dotenv()
+print("HOST:", os.getenv("DB_HOST"))
+print("USER:", os.getenv("DB_USER"))
+print("PWD:", os.getenv("DB_PASSWORD"))
+print("DB:", os.getenv("DB_NAME"))
+
+
 
 app = Flask(__name__)
 CORS(app)
@@ -167,4 +176,5 @@ def historial_kpis(dni):
 
 # ▶️ Ejecutar app
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+   app.run(host='0.0.0.0', port=5000)
+
