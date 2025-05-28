@@ -1,61 +1,28 @@
-<!DOCTYPE html>
-<html lang="es">
-  <head>
-    <meta charset="UTF-8" />
-    <title>Panel de Avisos</title>
-    <link
-      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
-      rel="stylesheet"
-    />
-  </head>
-  <body class="bg-light">
-    <div class="container mt-5">
-      
-      <div class="d-flex justify-content-between align-items-center mb-4">
-       <h2 class="mb-4">📋 Panel de Avisos para Choferes</h2>
-        <a href="{{ url_for('logout') }}" class="btn btn-outline-danger"
-          >Cerrar sesión</a
-        >
-      </div>
-      {% if mensaje_enviado %}
-      <div class="alert alert-success">✅ Aviso enviado con éxito</div>
-      {% endif %}
+{% extends "base.html" %}
 
-      <form method="post" class="mb-4">
-        <div class="mb-3">
-          <label for="dni" class="form-label">DNI del chofer</label>
-          <input
-            type="text"
-            class="form-control"
-            id="dni"
-            name="dni"
-            required
-          />
-        </div>
-        <div class="mb-3">
-          <label for="mensaje" class="form-label">Mensaje</label>
-          <textarea
-            class="form-control"
-            id="mensaje"
-            name="mensaje"
-            rows="3"
-            required
-          ></textarea>
-        </div>
-        <button type="submit" class="btn btn-primary">Enviar Aviso</button>
-      </form>
+{% block title %}Panel de Avisos{% endblock %}
+{% block header %}📋 Panel de Avisos para Choferes{% endblock %}
 
-      <h4>📜 Últimos avisos enviados</h4>
-      <ul class="list-group">
-        {% for aviso in avisos %}
-        <li class="list-group-item">
-          <strong>{{ aviso[0] }}</strong> - {{ aviso[1] }} <br /><small
-            class="text-muted"
-            >{{ aviso[2] }}</small
-          >
-        </li>
-        {% endfor %}
-      </ul>
+{% block content %}
+<form method="post" class="mb-4">
+    <div class="mb-3">
+        <label for="dni" class="form-label">DNI del chofer</label>
+        <input type="text" class="form-control" id="dni" name="dni" required />
     </div>
-  </body>
-</html>
+    <div class="mb-3">
+        <label for="mensaje" class="form-label">Mensaje</label>
+        <textarea class="form-control" id="mensaje" name="mensaje" rows="3" required></textarea>
+    </div>
+    <button type="submit" class="btn btn-primary">Enviar Aviso</button>
+</form>
+
+<h4>📜 Últimos avisos enviados</h4>
+<ul class="list-group">
+    {% for aviso in avisos %}
+    <li class="list-group-item">
+        <strong>{{ aviso[0] }}</strong> - {{ aviso[1] }} <br />
+        <small class="text-muted">{{ aviso[2] }}</small>
+    </li>
+    {% endfor %}
+</ul>
+{% endblock %}

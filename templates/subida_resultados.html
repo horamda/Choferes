@@ -1,0 +1,45 @@
+
+{% extends "base.html" %}
+
+{% block title %}Subida de Resultados{% endblock %}
+{% block header %}📤 Cargar Resultados desde .txt{% endblock %}
+
+{% block content %}
+<form method="POST" enctype="multipart/form-data" class="mt-4">
+    <div class="mb-3">
+        <label for="archivo" class="form-label">Seleccionar archivo .txt</label>
+        <input class="form-control" type="file" id="archivo" name="archivo" accept=".txt" required>
+    </div>
+    <button type="submit" class="btn btn-success">Subir archivo</button>
+</form>
+
+{% if registros %}
+<h5 class="mt-5">📄 Registros cargados</h5>
+<table class="table table-bordered mt-2">
+    <thead class="table-light">
+        <tr>
+            <th>DNI</th>
+            <th>Fecha</th>
+            <th>Entregas</th>
+            <th>Rechazos</th>
+            <th>Puntualidad</th>
+            <th>Km</th>
+            <th>Servicio</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for r in registros %}
+        <tr>
+            <td>{{ r.dni }}</td>
+            <td>{{ r.fecha }}</td>
+            <td>{{ r.entregas }}</td>
+            <td>{{ r.rechazos }}</td>
+            <td>{{ r.puntualidad }}</td>
+            <td>{{ r.km }}</td>
+            <td>{{ r.servicio }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endif %}
+{% endblock %}

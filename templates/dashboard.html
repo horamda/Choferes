@@ -1,0 +1,65 @@
+
+{% extends "base.html" %}
+
+{% block title %}Dashboard{% endblock %}
+{% block header %}📊 Dashboard General{% endblock %}
+
+{% block content %}
+<div class="row mt-4">
+    <div class="col-md-4">
+        <div class="card text-white bg-primary mb-3">
+            <div class="card-body">
+                <h5 class="card-title">Choferes Activos</h5>
+                <p class="card-text fs-3">12</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-white bg-success mb-3">
+            <div class="card-body">
+                <h5 class="card-title">Entregas Hoy</h5>
+                <p class="card-text fs-3">87</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-white bg-danger mb-3">
+            <div class="card-body">
+                <h5 class="card-title">Rechazos</h5>
+                <p class="card-text fs-3">5</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card mt-4">
+    <div class="card-body">
+        <h5 class="card-title">Tendencia de Entregas</h5>
+        <canvas id="kpiChart"></canvas>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    const ctx = document.getElementById('kpiChart');
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: ['Lun', 'Mar', 'Mié', 'Jue', 'Vie'],
+            datasets: [{
+                label: 'Entregas',
+                data: [12, 19, 8, 15, 20],
+                borderColor: 'rgba(54, 162, 235, 1)',
+                tension: 0.3,
+                fill: false
+            }]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                y: { beginAtZero: true }
+            }
+        }
+    });
+</script>
+{% endblock %}

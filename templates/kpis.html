@@ -1,0 +1,48 @@
+
+{% extends "base.html" %}
+
+{% block title %}KPIs{% endblock %}
+{% block header %}📈 KPIs de Choferes{% endblock %}
+
+{% block content %}
+<h5 class="mt-4">🔍 Buscar KPIs por DNI</h5>
+<form method="GET" action="#" class="row g-3 mb-4">
+    <div class="col-auto">
+        <input type="text" name="dni" class="form-control" placeholder="DNI del chofer" required>
+    </div>
+    <div class="col-auto">
+        <button type="submit" class="btn btn-primary">Buscar</button>
+    </div>
+</form>
+
+<div class="card">
+    <div class="card-body">
+        <h5 class="card-title">📊 Historial de KPIs (demo)</h5>
+        <canvas id="historialChart"></canvas>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    const ctx = document.getElementById('historialChart');
+    new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: ['Lun', 'Mar', 'Mié', 'Jue', 'Vie'],
+            datasets: [{
+                label: 'Entregas',
+                data: [10, 15, 7, 12, 20],
+                backgroundColor: 'rgba(13, 110, 253, 0.6)',
+                borderColor: 'rgba(13, 110, 253, 1)',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                y: { beginAtZero: true }
+            }
+        }
+    });
+</script>
+{% endblock %}
