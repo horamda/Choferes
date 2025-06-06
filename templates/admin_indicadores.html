@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+
+{% block title %}Administrar Indicadores{% endblock %}
+{% block header %}🛠️ Administración de Indicadores{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+
+    <div class="mb-3 text-end">
+        <a href="{{ url_for('nuevo_indicador') }}" class="btn btn-success">+ Crear Indicador</a>
+    </div>
+
+    <form method="get" class="row g-3 mb-4">
+        <div class="col-auto">
+            <label for="sector" class="form-label">Filtrar por sector:</label>
+            <select name="sector_id" class="form-select" onchange="this.form.submit()">
+                <option value="">-- Todos --</option>
+                {% for id, nombre in sectores %}
+                    <option value="{{ id }}" {% if id == sector_id %}selected{% endif %}>{{ nombre }}</option>
+                {% endfor %}
+            </select>
+        </div>
+    </form>
+
+    <table class="table table-striped table-hover align-middle">
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>Indicador</th>
+                <th>Sector</th>
+                <th>Estado</th>
+                <th>Acción</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for indicador in indicadores %}
+            <tr>
+                <td>{{ indicador.id }}</td>
+                <td>{{ indicador.nombre }}</td>
+                <td>{{ indicador.sector_nombre }}</td>
+                <td>
+                    {% if indicador.activo %}
+                        <span class="badge bg-success">Activo</span>
+                    {% else %}
+                        <span class="badge bg-secondary">Inactivo</span>
+                    {% endif %}
+                </td>
+                <td class="d-flex flex-wrap gap-2">
+                    <a href="{{ url_for('editar_indicador', id=indicador.id) }}" class="btn btn-sm btn-outline-secondary">
+                        Editar
+                    </a>
+                    <form action="{{ url_for('toggle_indicador', id=indicador.id) }}" method="POST">
+                        <button class="btn btn-sm {% if indicador.activo %}btn-danger{% else %}btn-success{% endif %}">
+                            {% if indicador.activo %}Desactivar{% else %}Activar{% endif %}
+                        </button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}
+

@@ -1,24 +1,50 @@
 {% extends "base.html" %}
 
-{% block title %}Lista de Choferes{% endblock %}
-{% block header %}🧑‍✈️ Lista de Choferes{% endblock %}
+{% block title %}Lista de Empleados{% endblock %}
+{% block header %}🧑‍✈️ Lista de Empleados{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-end mb-3">
-    <a href="{{ url_for('nuevo_chofer') }}" class="btn btn-success">+ Nuevo Chofer</a>
+<div class="d-flex justify-content-end mb-4">
+    <a href="{{ url_for('nuevo_chofer') }}" class="btn btn-success">+ Nuevo Empleado</a>
 </div>
 
 <div class="row">
-    {% for dni, nombre in choferes %}
-    <div class="col-md-4 mb-4">
-        <div class="card">
-            <div class="card-body text-center">
-                <img src="{{ url_for('imagen_chofer', dni=dni) }}" class="foto mb-3" alt="Foto de {{ nombre }}">
-                <h5 class="card-title">{{ nombre }}</h5>
-                <p class="card-text">DNI: {{ dni }}</p>
-                <div class="d-flex justify-content-center mt-2">
-                    <a href="{{ url_for('editar_chofer', dni=dni) }}" class="btn btn-sm btn-outline-primary me-2">Editar</a>
-                    <form action="{{ url_for('eliminar_chofer', dni=dni) }}" method="POST" onsubmit="return confirm('¿Eliminar chofer?')">
+    {% for dni, nombre, sector in choferes %}
+    <div class="col-12 col-sm-6 col-md-4 col-lg-3 mb-4">
+        <div class="card h-100 shadow-sm border-0">
+            <div class="card-body text-center d-flex flex-column justify-content-between" style="min-height: 280px;">
+                <img src="{{ url_for('imagen_chofer', dni=dni) }}" alt="Foto de {{ nombre }}"
+                     class="mb-3 rounded-circle mx-auto" style="height: 120px; width: 120px; object-fit: cover;">
+                <h5 class="card-title">
+                    {% if sector == 'entrega' %}
+                        🚚
+                    {% elif sector == 'almacén' %}
+                        📦
+                    {% elif sector == 'administración' %}
+                        🧾
+                    {% elif sector == 'mantenimiento' %}
+                        🛠️
+                    {% else %}
+                        👤
+                    {% endif %}
+                    {{ nombre }}
+                </h5>
+                <p class="card-text mb-1">DNI: <strong>{{ dni }}</strong></p>
+                <p class="card-text">
+                    <span class="badge 
+                        {% if sector == 'entrega' %}bg-primary
+                        {% elif sector == 'almacén' %}bg-success
+                        {% elif sector == 'administración' %}bg-warning text-dark
+                        {% elif sector == 'mantenimiento' %}bg-secondary
+                        {% else %}bg-light text-dark
+                        {% endif %}
+                    ">
+                        {{ sector | capitalize }}
+                    </span>
+                </p>
+                <div class="mt-3 d-flex justify-content-center gap-2">
+                    <a href="{{ url_for('editar_chofer', dni=dni) }}" class="btn btn-sm btn-outline-primary">Editar</a>
+                    <form action="{{ url_for('eliminar_chofer', dni=dni) }}" method="POST" onsubmit="return confirm('¿Eliminar Empleado?')">
                         <button class="btn btn-sm btn-outline-danger">Eliminar</button>
                     </form>
                 </div>
@@ -28,3 +54,4 @@
     {% endfor %}
 </div>
 {% endblock %}
+

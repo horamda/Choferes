@@ -1,29 +1,35 @@
+{% extends "base.html" %}
 
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <title>Editar Chofer</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-</head>
-<body class="bg-light">
-    <div class="container mt-5">
-        <h2>✏️ Editar Chofer</h2>
-        <form method="POST" enctype="multipart/form-data">
-            <div class="mb-3">
-                <label class="form-label">DNI</label>
-                <input type="text" class="form-control" value="{{ dni }}" readonly>
-            </div>
-            <div class="mb-3">
-                <label class="form-label">Nombre</label>
-                <input type="text" name="nombre" class="form-control" value="{{ nombre }}" required>
-            </div>
-            <div class="mb-3">
-                <label class="form-label">Actualizar Foto</label>
-                <input type="file" name="imagen" class="form-control" accept="image/*">
-            </div>
-            <button type="submit" class="btn btn-primary">Guardar Cambios</button>
-        </form>
-    </div>
-</body>
-</html>
+{% block title %}Editar Empleado{% endblock %}
+{% block header %}✏️ Editar Empleado{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <form method="POST" enctype="multipart/form-data">
+        <div class="mb-3">
+            <label class="form-label">DNI</label>
+            <input type="text" class="form-control" value="{{ dni }}" readonly>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Nombre</label>
+            <input type="text" name="nombre" class="form-control" value="{{ nombre }}" required>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Sector</label>
+            <select name="sector" class="form-select" required>
+                <option value="entrega" {% if sector == 'entrega' %}selected{% endif %}>Entrega</option>
+                <option value="almacén" {% if sector == 'almacén' %}selected{% endif %}>Almacén</option>
+                <option value="administración" {% if sector == 'administración' %}selected{% endif %}>Administración</option>
+                <option value="mantenimiento" {% if sector == 'mantenimiento' %}selected{% endif %}>Mantenimiento</option>
+            </select>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Actualizar Foto</label>
+            <input type="file" name="imagen" class="form-control" accept="image/*">
+        </div>
+        <button type="submit" class="btn btn-primary">Guardar Cambios</button>
+    </form>
+</div>
+{% endblock %}
+
+

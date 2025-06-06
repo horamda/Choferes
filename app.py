@@ -1,5 +1,4 @@
-
-from flask import Flask, request, jsonify, render_template, redirect, url_for, session, send_file, flash, get_flashed_messages
+from flask import Flask, request, jsonify, render_template, redirect, url_for, session, send_file, flash
 from flask_cors import CORS
 from datetime import timedelta
 import mysql.connector
@@ -28,6 +27,10 @@ def login_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
+@app.route('/')
+def home():
+    return redirect(url_for('login_admin'))
+
 @app.route('/login', methods=['GET', 'POST'])
 def login_admin():
     error = None
@@ -54,6 +57,81 @@ def login_admin():
 def logout():
     session.pop('admin', None)
     return redirect(url_for('login_admin'))
+
+@app.route('/dashboard')
+@login_required
+def dashboard():
+    sector_id = request.args.get('sector_id', type=int, default=1)
+
+    sectores = [
+        (1, "Entrega"),
+        (2, "Almacén"),
+        (3, "Administración"),
+        (4, "Mantenimiento"),
+    ]
+
+    conn = get_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    # Traer indicadores activos del sector
+    cursor.execute("""
+        SELECT id, nombre 
+        FROM indicadores 
+        WHERE sector_id = %s AND activo = 1
+    """, (sector_id,))
+    indicadores = cursor.fetchall()
+
+    tarjetas = []
+    graficos = []
+
+    for indicador in indicadores:
+        indicador_id = indicador['id']
+        nombre = indicador['nombre']
+
+        # Valor de hoy
+        cursor.execute("""
+            SELECT SUM(valor) AS total
+            FROM kpis
+            WHERE indicador_id = %s AND fecha = CURDATE()
+        """, (indicador_id,))
+        valor_hoy = cursor.fetchone()['total'] or 0
+        tarjetas.append({'nombre': nombre, 'valor': int(valor_hoy)})
+
+        # Tendencia 7 días
+        cursor.execute("""
+            SELECT fecha, SUM(valor) AS total
+            FROM kpis
+            WHERE indicador_id = %s
+            GROUP BY fecha
+            ORDER BY fecha DESC
+            LIMIT 7
+        """, (indicador_id,))
+        rows = cursor.fetchall()
+        if rows:
+            fechas = [r['fecha'].strftime('%d/%m') for r in reversed(rows)]
+            valores = [int(r['total']) for r in reversed(rows)]
+        else:
+            fechas = []
+            valores = []
+
+        graficos.append({
+            'nombre': nombre.capitalize(),
+            'labels': fechas,
+            'data': valores
+        })
+
+    cursor.close()
+    conn.close()
+
+    return render_template("dashboard.html",
+        tarjetas=tarjetas,
+        graficos=graficos,
+        sectores=sectores,
+        sector_id=sector_id
+    )
+
+
+
 
 @app.route('/panel', methods=['GET', 'POST'])
 @login_required
@@ -82,17 +160,12 @@ def panel():
 
     return render_template('panel.html', avisos=avisos, mensaje_enviado=mensaje_enviado)
 
-@app.route('/dashboard')
-@login_required
-def dashboard():
-    return render_template('dashboard.html')
-
 @app.route('/admin/choferes')
 @login_required
 def listar_choferes():
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT dni, nombre FROM choferes")
+    cursor.execute("SELECT dni, nombre, sector FROM choferes")
     choferes = cursor.fetchall()
     cursor.close()
     conn.close()
@@ -104,6 +177,7 @@ def nuevo_chofer():
     if request.method == 'POST':
         dni = request.form['dni']
         nombre = request.form['nombre']
+        sector = request.form['sector']
         imagen = request.files['imagen']
         imagen_blob = imagen.read() if imagen else None
 
@@ -114,7 +188,7 @@ def nuevo_chofer():
             flash("❌ Ya existe un chofer con ese DNI", "danger")
             return redirect(url_for('nuevo_chofer'))
 
-        cursor.execute("INSERT INTO choferes (dni, nombre, imagen) VALUES (%s, %s, %s)", (dni, nombre, imagen_blob))
+        cursor.execute("INSERT INTO choferes (dni, nombre, sector, imagen) VALUES (%s, %s, %s, %s)", (dni, nombre, sector, imagen_blob))
         conn.commit()
         cursor.close()
         conn.close()
@@ -131,19 +205,20 @@ def editar_chofer(dni):
 
     if request.method == 'POST':
         nombre = request.form['nombre']
+        sector = request.form['sector']
         imagen = request.files['imagen']
         if imagen:
             imagen_blob = imagen.read()
-            cursor.execute("UPDATE choferes SET nombre = %s, imagen = %s WHERE dni = %s", (nombre, imagen_blob, dni))
+            cursor.execute("UPDATE choferes SET nombre = %s, sector = %s, imagen = %s WHERE dni = %s", (nombre, sector, imagen_blob, dni))
         else:
-            cursor.execute("UPDATE choferes SET nombre = %s WHERE dni = %s", (nombre, dni))
+            cursor.execute("UPDATE choferes SET nombre = %s, sector = %s WHERE dni = %s", (nombre, sector, dni))
         conn.commit()
         cursor.close()
         conn.close()
         flash("✅ Datos del chofer actualizados", "success")
         return redirect(url_for('listar_choferes'))
 
-    cursor.execute("SELECT nombre FROM choferes WHERE dni = %s", (dni,))
+    cursor.execute("SELECT nombre, sector FROM choferes WHERE dni = %s", (dni,))
     chofer = cursor.fetchone()
     cursor.close()
     conn.close()
@@ -152,7 +227,7 @@ def editar_chofer(dni):
         flash("❌ Chofer no encontrado", "danger")
         return redirect(url_for('listar_choferes'))
 
-    return render_template('editar_chofer.html', dni=dni, nombre=chofer[0])
+    return render_template('editar_chofer.html', dni=dni, nombre=chofer[0], sector=chofer[1])
 
 @app.route('/admin/choferes/eliminar/<dni>', methods=['POST'])
 @login_required
@@ -180,26 +255,22 @@ def imagen_chofer(dni):
     else:
         return "", 204
 
-@app.route('/admin/kpis')
-@login_required
-def vista_kpis():
-    return render_template('kpis.html')
-
-
 @app.route('/api/login', methods=['POST'])
 def login_chofer():
     data = request.get_json()
     dni = data.get('dni')
     if not dni:
         return jsonify({'success': False, 'message': 'DNI requerido'}), 400
+
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT nombre FROM choferes WHERE dni = %s", (dni,))
+    cursor.execute("SELECT nombre, sector FROM choferes WHERE dni = %s", (dni,))
     result = cursor.fetchone()
     cursor.close()
     conn.close()
+
     if result:
-        return jsonify({'success': True, 'nombre': result[0]})
+        return jsonify({'success': True, 'nombre': result[0], 'sector': result[1]})
     else:
         return jsonify({'success': False, 'message': 'Chofer no encontrado'}), 404
 
@@ -207,48 +278,70 @@ def login_chofer():
 def kpis(dni):
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("""
-        SELECT fecha, entregas, rechazos, puntualidad, km, servicio
-        FROM resultados_kpi
-        WHERE dni = %s
-        ORDER BY fecha DESC
-        LIMIT 1
-    """, (dni,))
+    cursor.execute("SELECT sector FROM choferes WHERE dni = %s", (dni,))
     result = cursor.fetchone()
+    if not result:
+        cursor.close()
+        conn.close()
+        return jsonify({'message': 'Chofer no encontrado'}), 404
+    sector = result[0]
+
+    cursor.execute("""
+        SELECT fecha, indicador, valor
+        FROM kpis
+        WHERE dni = %s AND sector = %s
+        ORDER BY fecha DESC
+        LIMIT 20
+    """, (dni, sector))
+    rows = cursor.fetchall()
     cursor.close()
     conn.close()
-    if result:
-        keys = ['fecha', 'entregas', 'rechazos', 'puntualidad', 'km', 'servicio']
-        return jsonify(dict(zip(keys, result)))
-    else:
+
+    if not rows:
         return jsonify({'message': 'No se encontraron KPIs'}), 404
+
+    fecha = rows[0][0]
+    kpis_dict = {'fecha': fecha.strftime('%Y-%m-%d')}
+    for _, indicador, valor in rows:
+        kpis_dict[indicador] = valor
+
+    return jsonify(kpis_dict)
 
 @app.route('/kpis/historial/<dni>')
 def historial_kpis(dni):
-    page = int(request.args.get('page', 1))
-    per_page = 10
-    offset = (page - 1) * per_page
     conn = get_connection()
     cursor = conn.cursor()
+    cursor.execute("SELECT sector FROM choferes WHERE dni = %s", (dni,))
+    result = cursor.fetchone()
+    if not result:
+        cursor.close()
+        conn.close()
+        return jsonify([])
+
+    sector = result[0]
     cursor.execute("""
-        SELECT fecha, entregas, rechazos, puntualidad, km, servicio
-        FROM resultados_kpi
-        WHERE dni = %s
-        ORDER BY fecha DESC
-        LIMIT %s OFFSET %s
-    """, (dni, per_page, offset))
-    results = cursor.fetchall()
+        SELECT fecha, indicador, valor
+        FROM kpis
+        WHERE dni = %s AND sector = %s
+        ORDER BY fecha DESC, indicador
+        LIMIT 100
+    """, (dni, sector))
+    rows = cursor.fetchall()
     cursor.close()
     conn.close()
-    kpis = [{
-        'fecha': row[0].strftime('%Y-%m-%d'),
-        'entregas': row[1],
-        'rechazos': row[2],
-        'puntualidad': row[3],
-        'km': float(row[4]),
-        'servicio': row[5]
-    } for row in results]
-    return jsonify(kpis)
+
+    historial = {}
+    for fecha, indicador, valor in rows:
+        fecha_str = fecha.strftime('%Y-%m-%d')
+        if fecha_str not in historial:
+            historial[fecha_str] = {}
+        historial[fecha_str][indicador] = valor
+
+    salida = []
+    for fecha in sorted(historial.keys(), reverse=True):
+        salida.append({'fecha': fecha, **historial[fecha]})
+
+    return jsonify(salida)
 
 @app.route('/avisos/<dni>')
 def avisos(dni):
@@ -277,52 +370,230 @@ def subida_resultados():
             return redirect(url_for('subida_resultados'))
 
         registros_insertados = 0
+        lineas_invalidas = 0
+
         try:
             conn = get_connection()
             cursor = conn.cursor()
 
-            for linea in archivo.stream.readlines():
+            for i, linea in enumerate(archivo.stream.readlines(), start=1):
                 try:
                     decoded = linea.decode('utf-8').strip()
                     if not decoded or decoded.startswith('#'):
                         continue
 
                     partes = decoded.split(',')
-                    if len(partes) != 7:
+                    if len(partes) != 5:
+                        print(f"[Línea {i}] ❌ Formato incorrecto: {decoded}")
+                        lineas_invalidas += 1
                         continue
 
-                    dni = partes[0]
-                    fecha = partes[1]
-                    entregas = int(partes[2])
-                    rechazos = int(partes[3])
-                    puntualidad = float(partes[4])
-                    km = float(partes[5])
-                    servicio = partes[6]
+                    dni, fecha, sector_id, indicador, valor = partes
+
+                    try:
+                        sector_id = int(sector_id)
+                        valor = float(valor)
+                    except ValueError as ve:
+                        print(f"[Línea {i}] ❌ Error de conversión: {ve} - {decoded}")
+                        lineas_invalidas += 1
+                        continue
 
                     cursor.execute("""
-                        INSERT INTO resultados_kpi (dni, fecha, entregas, rechazos, puntualidad, km, servicio)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s)
-                    """, (dni, fecha, entregas, rechazos, puntualidad, km, servicio))
+                        INSERT INTO kpis (dni, fecha, sector_id, indicador, valor)
+                        VALUES (%s, %s, %s, %s, %s)
+                    """, (dni, fecha, sector_id, indicador, valor))
 
                     registros_insertados += 1
 
                 except Exception as e:
-                    continue  # Línea con error
+                    print(f"[Línea {i}] ⚠️ Error SQL: {e} - {decoded}")
+                    lineas_invalidas += 1
+                    continue
 
             conn.commit()
             cursor.close()
             conn.close()
-            flash(f"✅ {registros_insertados} registros cargados correctamente.", "success")
+
+            mensaje = f"✅ {registros_insertados} registros cargados correctamente."
+            if lineas_invalidas:
+                mensaje += f" ⚠️ {lineas_invalidas} líneas fueron ignoradas por formato incorrecto."
+            flash(mensaje, "success")
 
         except Exception as e:
-            flash("❌ Error al procesar el archivo.", "danger")
+            flash(f"❌ Error general al procesar el archivo: {str(e)}", "danger")
 
     return render_template('subida_resultados.html')
 
-@app.route('/')
-def home():
-    return redirect(url_for('login_admin'))
 
+
+
+@app.route('/admin/kpis')
+@login_required
+def vista_kpis():
+    return render_template('kpis.html')
+
+@app.route('/testdb')
+def testdb():
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT DATABASE()")
+        db_name = cursor.fetchone()[0]
+        cursor.close()
+        conn.close()
+        return f"✅ Conectado a la base de datos: {db_name}"
+    except Exception as e:
+        return f"❌ Error de conexión: {e}"
+    
+    
+@app.route('/admin/indicadores', methods=['GET'])
+@login_required
+def admin_indicadores():
+    sector_id = request.args.get('sector_id', type=int)
+
+    conn = get_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    # Cargar sectores para el filtro (usando tabla estática o hardcoded)
+    sectores = [
+        (1, "Entrega"),
+        (2, "Almacén"),
+        (3, "Administración"),
+        (4, "Mantenimiento"),
+    ]
+
+    # Query indicadores con sector
+    if sector_id:
+        cursor.execute("""
+            SELECT i.*, %s AS sector_nombre
+            FROM indicadores i
+            WHERE i.sector_id = %s
+        """, (sectores[sector_id - 1][1], sector_id))
+    else:
+        cursor.execute("SELECT * FROM indicadores")
+
+    indicadores = cursor.fetchall()
+
+    # Agregar nombre del sector manualmente si no se filtró
+    if not sector_id:
+        for ind in indicadores:
+            ind["sector_nombre"] = next((n for s, n in sectores if s == ind["sector_id"]), "Desconocido")
+
+    cursor.close()
+    conn.close()
+
+    return render_template("admin_indicadores.html", indicadores=indicadores, sectores=sectores, sector_id=sector_id)
+@app.route('/admin/indicadores/toggle/<int:id>', methods=['POST'])
+@login_required
+def toggle_indicador(id):
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT activo FROM indicadores WHERE id = %s", (id,))
+    resultado = cursor.fetchone()
+
+    if resultado:
+        nuevo_estado = 0 if resultado[0] == 1 else 1
+        cursor.execute("UPDATE indicadores SET activo = %s WHERE id = %s", (nuevo_estado, id))
+        conn.commit()
+
+    cursor.close()
+    conn.close()
+    return redirect(url_for('admin_indicadores'))
+
+@app.route('/admin/indicadores/nuevo', methods=['GET', 'POST'])
+@login_required
+def nuevo_indicador():
+    sectores = [
+        (1, "Entrega"),
+        (2, "Almacén"),
+        (3, "Administración"),
+        (4, "Mantenimiento"),
+    ]
+
+    if request.method == 'POST':
+        nombre = request.form['nombre'].strip().upper()
+        sector_id = request.form['sector_id']
+        activo = int(request.form['activo'])
+
+        conn = get_connection()
+        cursor = conn.cursor()
+
+        # Validar duplicados por nombre y sector
+        cursor.execute("""
+            SELECT id FROM indicadores
+            WHERE LOWER(nombre) = %s AND sector_id = %s
+        """, (nombre, sector_id))
+        existente = cursor.fetchone()
+
+        if existente:
+            flash("❌ Ya existe un indicador con ese nombre en ese sector.", "danger")
+        else:
+            cursor.execute("""
+                INSERT INTO indicadores (nombre, sector_id, activo)
+                VALUES (%s, %s, %s)
+            """, (nombre, sector_id, activo))
+            conn.commit()
+            flash("✅ Indicador creado correctamente.", "success")
+            cursor.close()
+            conn.close()
+            return redirect(url_for('admin_indicadores'))
+
+        cursor.close()
+        conn.close()
+
+    return render_template("nuevo_indicador.html", sectores=sectores)
+
+
+@app.route('/admin/indicadores/editar/<int:id>', methods=['GET', 'POST'])
+@login_required
+def editar_indicador(id):
+    sectores = [
+        (1, "Entrega"),
+        (2, "Almacén"),
+        (3, "Administración"),
+        (4, "Mantenimiento"),
+    ]
+
+    conn = get_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    if request.method == 'POST':
+        nombre = request.form['nombre'].strip().upper()
+        sector_id = int(request.form['sector_id'])
+        activo = int(request.form['activo'])
+
+        # Verificar si existe otro indicador con ese nombre en ese sector
+        cursor.execute("""
+            SELECT id FROM indicadores
+            WHERE LOWER(nombre) = %s AND sector_id = %s AND id != %s
+        """, (nombre, sector_id, id))
+        duplicado = cursor.fetchone()
+
+        if duplicado:
+            flash("❌ Ya existe un indicador con ese nombre en ese sector.", "danger")
+        else:
+            cursor.execute("""
+                UPDATE indicadores
+                SET nombre = %s, sector_id = %s, activo = %s
+                WHERE id = %s
+            """, (nombre, sector_id, activo, id))
+            conn.commit()
+            flash("✅ Indicador actualizado correctamente.", "success")
+            return redirect(url_for('admin_indicadores'))
+
+    # GET: cargar datos
+    cursor.execute("SELECT * FROM indicadores WHERE id = %s", (id,))
+    indicador = cursor.fetchone()
+
+    if not indicador:
+        flash("❌ Indicador no encontrado.", "danger")
+        return redirect(url_for('admin_indicadores'))
+
+    cursor.close()
+    conn.close()
+    return render_template("editar_indicador.html", indicador=indicador, sectores=sectores)
+   
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)

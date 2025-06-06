@@ -1,65 +1,80 @@
-
 {% extends "base.html" %}
-
-{% block title %}Dashboard{% endblock %}
+{% block title %}Dashboard General{% endblock %}
 {% block header %}📊 Dashboard General{% endblock %}
 
 {% block content %}
-<div class="row mt-4">
-    <div class="col-md-4">
-        <div class="card text-white bg-primary mb-3">
+
+<!-- Selector de sector -->
+<form method="get" class="mb-4 d-flex align-items-center">
+    <label class="me-2 fw-bold">Seleccionar sector:</label>
+    <select name="sector_id" class="form-select w-auto me-3" onchange="this.form.submit()">
+        {% for id, nombre in sectores %}
+            <option value="{{ id }}" {% if id == sector_id %}selected{% endif %}>{{ nombre }}</option>
+        {% endfor %}
+    </select>
+</form>
+
+{% if tarjetas %}
+<div class="row mb-4">
+    {% for t in tarjetas %}
+    <div class="col-md-4 mb-3">
+        <div class="card text-white bg-primary">
             <div class="card-body">
-                <h5 class="card-title">Choferes Activos</h5>
-                <p class="card-text fs-3">12</p>
+                <h5 class="card-title text-capitalize">{{ t.nombre }}</h5>
+                <h2>{{ t.valor }}</h2>
             </div>
         </div>
     </div>
-    <div class="col-md-4">
-        <div class="card text-white bg-success mb-3">
-            <div class="card-body">
-                <h5 class="card-title">Entregas Hoy</h5>
-                <p class="card-text fs-3">87</p>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-4">
-        <div class="card text-white bg-danger mb-3">
-            <div class="card-body">
-                <h5 class="card-title">Rechazos</h5>
-                <p class="card-text fs-3">5</p>
-            </div>
-        </div>
-    </div>
+    {% endfor %}
 </div>
 
-<div class="card mt-4">
-    <div class="card-body">
-        <h5 class="card-title">Tendencia de Entregas</h5>
-        <canvas id="kpiChart"></canvas>
+<div class="row">
+    {% for g in graficos %}
+    <div class="col-md-6 mb-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">{{ g.nombre }}</h5>
+                {% if g.data %}
+                <canvas id="grafico_{{ loop.index }}"></canvas>
+                {% else %}
+                <div class="alert alert-secondary">No hay datos disponibles para este indicador.</div>
+                {% endif %}
+            </div>
+        </div>
     </div>
+    {% endfor %}
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-    const ctx = document.getElementById('kpiChart');
-    new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: ['Lun', 'Mar', 'Mié', 'Jue', 'Vie'],
-            datasets: [{
-                label: 'Entregas',
-                data: [12, 19, 8, 15, 20],
-                borderColor: 'rgba(54, 162, 235, 1)',
-                tension: 0.3,
-                fill: false
-            }]
-        },
-        options: {
-            responsive: true,
-            scales: {
-                y: { beginAtZero: true }
-            }
+{% for g in graficos %}
+{% if g.data %}
+new Chart(document.getElementById('grafico_{{ loop.index }}'), {
+    type: 'line',
+    data: {
+        labels: {{ g.labels|tojson }},
+        datasets: [{
+            label: '{{ g.nombre }}',
+            data: {{ g.data|tojson }},
+            borderColor: '#0d6efd',
+            fill: false,
+            tension: 0.3
+        }]
+    },
+    options: {
+        responsive: true,
+        scales: {
+            y: { beginAtZero: true }
         }
-    });
+    }
+});
+{% endif %}
+{% endfor %}
 </script>
+{% else %}
+<div class="alert alert-warning text-center">
+    No hay indicadores activos en este sector actualmente.
+</div>
+{% endif %}
 {% endblock %}
+

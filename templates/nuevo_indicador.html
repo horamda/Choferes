@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+
+{% block title %}Nuevo Indicador{% endblock %}
+{% block header %}➕ Crear Indicador{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <form method="POST">
+        <div class="mb-3">
+            <label class="form-label">Nombre del Indicador</label>
+            <input type="text" name="nombre" class="form-control" required>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Sector</label>
+            <select name="sector_id" class="form-select" required>
+                <option value="">-- Seleccionar sector --</option>
+                {% for id, nombre in sectores %}
+                    <option value="{{ id }}">{{ nombre }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Estado inicial</label>
+            <select name="activo" class="form-select" required>
+                <option value="1">Activo</option>
+                <option value="0">Inactivo</option>
+            </select>
+        </div>
+
+        <button type="submit" class="btn btn-primary">Crear Indicador</button>
+        <a href="{{ url_for('admin_indicadores') }}" class="btn btn-secondary">Cancelar</a>
+    </form>
+</div>
+{% endblock %}
