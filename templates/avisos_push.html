@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Avisos Push{% endblock %}
+{% block header %}🔔 Enviar Avisos Push{% endblock %}
+
+{% block content %}
+
+<!-- Formulario para enviar aviso push -->
+<form method="POST" class="mb-4">
+  <div class="mb-3">
+    <label for="dni" class="form-label">🆔 DNI del empleado</label>
+    <input type="text" class="form-control" name="dni" id="dni" required maxlength="8" pattern="[0-9]{7,8}" placeholder="Ej: 12345678">
+  </div>
+
+  <div class="mb-3">
+    <label for="mensaje" class="form-label">✉️ Mensaje</label>
+    <textarea class="form-control" name="mensaje" id="mensaje" rows="3" required placeholder="Escribí tu aviso..."></textarea>
+  </div>
+
+  <button type="submit" class="btn btn-primary">
+    <i class="bi bi-send-fill"></i> Enviar Aviso Push
+  </button>
+</form>
+
+<hr>
+
+<!-- Historial de avisos enviados -->
+<h5>📜 Historial de Avisos Enviados</h5>
+
+{% if historial %}
+<table class="table table-bordered table-hover align-middle">
+  <thead class="table-light">
+    <tr>
+      <th scope="col">DNI</th>
+      <th scope="col">Título</th>
+      <th scope="col">Mensaje</th>
+      <th scope="col">Fecha</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for d, t, m, f in historial %}
+    <tr>
+      <td>{{ d }}</td>
+      <td>{{ t }}</td>
+      <td>{{ m }}</td>
+      <td>{{ f.strftime('%d/%m/%Y %H:%M') }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<div class="alert alert-secondary text-center">
+  No hay avisos push registrados aún.
+</div>
+{% endif %}
+
+{% endblock %}

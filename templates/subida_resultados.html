@@ -1,8 +1,7 @@
-
 {% extends "base.html" %}
 
 {% block title %}Subida de Resultados{% endblock %}
-{% block header %}📤 Cargar Resultados desde .txt{% endblock %}
+{% block header %}📄 Cargar Resultados desde .txt{% endblock %}
 
 {% block content %}
 <form method="POST" enctype="multipart/form-data" class="mt-4">
@@ -15,16 +14,14 @@
 
 {% if registros %}
 <h5 class="mt-5">📄 Registros cargados</h5>
+<p class="text-muted">Total: {{ registros|length }} registros</p>
 <table class="table table-bordered mt-2">
     <thead class="table-light">
         <tr>
             <th>DNI</th>
             <th>Fecha</th>
-            <th>Entregas</th>
-            <th>Rechazos</th>
-            <th>Puntualidad</th>
-            <th>Km</th>
-            <th>Servicio</th>
+            <th>Indicador</th>
+            <th>Valor</th>
         </tr>
     </thead>
     <tbody>
@@ -32,11 +29,8 @@
         <tr>
             <td>{{ r.dni }}</td>
             <td>{{ r.fecha }}</td>
-            <td>{{ r.entregas }}</td>
-            <td>{{ r.rechazos }}</td>
-            <td>{{ r.puntualidad }}</td>
-            <td>{{ r.km }}</td>
-            <td>{{ r.servicio }}</td>
+            <td>{{ r.indicador|capitalize }}</td>
+            <td class="{% if r.valor > 90 %}text-success{% elif r.valor < 30 %}text-danger{% endif %}">{{ r.valor }}</td>
         </tr>
         {% endfor %}
     </tbody>

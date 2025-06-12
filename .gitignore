@@ -34,3 +34,4 @@ db.sqlite3
 instance/
 .env
 *.log
+firebase/service_account.json

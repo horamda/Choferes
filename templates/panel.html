@@ -4,25 +4,51 @@
 {% block header %}📋 Panel de Avisos para Choferes{% endblock %}
 
 {% block content %}
-<form method="post" class="mb-4">
+
+<!-- Mensajes Flash -->
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    {% for category, message in messages %}
+      <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+        {{ message }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
+      </div>
+    {% endfor %}
+  {% endif %}
+{% endwith %}
+
+<!-- Formulario de Aviso -->
+<form method="post" class="mb-4" novalidate>
     <div class="mb-3">
-        <label for="dni" class="form-label">DNI del chofer</label>
-        <input type="text" class="form-control" id="dni" name="dni" required />
+        <label for="dni" class="form-label">🔢 DNI del chofer</label>
+        <input type="text" class="form-control" id="dni" name="dni"
+               pattern="[0-9]{7,8}" maxlength="8"
+               title="Debe tener entre 7 y 8 dígitos numéricos" required>
+        <div class="form-text">Debe tener entre 7 y 8 dígitos.</div>
     </div>
     <div class="mb-3">
-        <label for="mensaje" class="form-label">Mensaje</label>
+        <label for="mensaje" class="form-label">✉️ Mensaje</label>
         <textarea class="form-control" id="mensaje" name="mensaje" rows="3" required></textarea>
     </div>
-    <button type="submit" class="btn btn-primary">Enviar Aviso</button>
+    <button type="submit" class="btn btn-primary">
+        📨 Enviar Aviso
+    </button>
 </form>
 
-<h4>📜 Últimos avisos enviados</h4>
-<ul class="list-group">
+<!-- Últimos avisos -->
+<h4 class="mt-5">📜 Últimos avisos enviados</h4>
+<ul class="list-group list-group-flush">
     {% for aviso in avisos %}
     <li class="list-group-item">
-        <strong>{{ aviso[0] }}</strong> - {{ aviso[1] }} <br />
-        <small class="text-muted">{{ aviso[2] }}</small>
+        <div class="d-flex justify-content-between">
+            <strong>DNI:</strong> {{ aviso[0] }}
+            <span class="text-muted"><small>{{ aviso[2] }}</small></span>
+        </div>
+        <div class="mt-1">{{ aviso[1] }}</div>
     </li>
+    {% else %}
+    <li class="list-group-item text-muted">No hay avisos registrados.</li>
     {% endfor %}
 </ul>
+
 {% endblock %}

@@ -1,48 +1,114 @@
-
 {% extends "base.html" %}
-
-{% block title %}KPIs{% endblock %}
-{% block header %}📈 KPIs de Choferes{% endblock %}
+{% block title %}KPIs de Empleado por DNI{% endblock %}
+{% block header %}📈 KPIs de Empleado por DNI{% endblock %}
 
 {% block content %}
-<h5 class="mt-4">🔍 Buscar KPIs por DNI</h5>
-<form method="GET" action="#" class="row g-3 mb-4">
-    <div class="col-auto">
-        <input type="text" name="dni" class="form-control" placeholder="DNI del chofer" required>
-    </div>
-    <div class="col-auto">
-        <button type="submit" class="btn btn-primary">Buscar</button>
-    </div>
-</form>
-
-<div class="card">
-    <div class="card-body">
-        <h5 class="card-title">📊 Historial de KPIs (demo)</h5>
-        <canvas id="historialChart"></canvas>
-    </div>
+<div class="mb-3">
+  <label for="dni" class="form-label">Buscar por DNI</label>
+  <div class="input-group">
+    <input type="text" class="form-control" id="dni" placeholder="Ingrese DNI...">
+    <button class="btn btn-primary" onclick="buscarKpis()">Buscar</button>
+  </div>
 </div>
+
+<div id="contenedorTarjetas" class="row mb-4"></div>
+<div id="contenedorGraficos" class="row"></div>
+<pre id="debug" style="white-space: pre-wrap; background:#f8f9fa; padding:1em; border:1px solid #dee2e6;"></pre>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-    const ctx = document.getElementById('historialChart');
-    new Chart(ctx, {
-        type: 'bar',
-        data: {
-            labels: ['Lun', 'Mar', 'Mié', 'Jue', 'Vie'],
+  let charts = [];
+
+  function sanitizeId(str) {
+    return str.replace(/[^a-zA-Z0-9]/g, '_');
+  }
+
+  async function buscarKpis() {
+    const dni = document.getElementById("dni").value.trim();
+    const tarjetasCont = document.getElementById("contenedorTarjetas");
+    const graficosCont = document.getElementById("contenedorGraficos");
+    const debug = document.getElementById("debug");
+
+    tarjetasCont.innerHTML = "";
+    graficosCont.innerHTML = "";
+    debug.innerText = "";
+    charts.forEach(c => c.destroy());
+    charts = [];
+
+    if (!dni) {
+      alert("Ingrese un DNI válido");
+      return;
+    }
+
+    try {
+      const hoyResp = await fetch(`/kpis/hoy_o_ultimo/${dni}`);
+      const resumen = await hoyResp.json();
+      if (!resumen.kpis || resumen.kpis.length === 0) {
+        tarjetasCont.innerHTML = '<div class="alert alert-warning text-center">No se encontraron KPIs</div>';
+        return;
+      }
+
+      for (const t of resumen.kpis) {
+        const canvasId = `grafico_${sanitizeId(t.indicador)}`;
+
+        tarjetasCont.insertAdjacentHTML("beforeend", `
+          <div class="col-md-3 mb-3">
+            <div class="card text-white bg-primary">
+              <div class="card-body">
+                <h5 class="card-title text-capitalize">${t.indicador}</h5>
+                <h2>${parseFloat(t.valor).toFixed(2)}</h2>
+              </div>
+            </div>
+          </div>`);
+
+        graficosCont.insertAdjacentHTML("beforeend", `
+          <div class="col-md-6 mb-4">
+            <div class="card">
+              <div class="card-body">
+                <h5 class="card-title">${t.indicador}</h5>
+                <canvas id="${canvasId}"></canvas>
+              </div>
+            </div>
+          </div>`);
+
+        await new Promise(resolve => setTimeout(resolve, 10));
+
+        const serieResp = await fetch(`/api/serie_indicador?indicador_id=${t.indicador_id}&sector_id=${t.sector_id}&from=2024-01-01&to=2025-12-31`);
+        const serie = await serieResp.json();
+        debug.innerText += `→ ${t.indicador}: ${JSON.stringify(serie)}\n`;
+
+        const ctx = document.getElementById(canvasId)?.getContext("2d");
+        if (!ctx || !serie?.labels?.length) {
+          debug.innerText += `⚠️ Sin datos para ${t.indicador}\n`;
+          continue;
+        }
+
+        const chart = new Chart(ctx, {
+          type: serie.tipo || "bar",
+          data: {
+            labels: serie.labels,
             datasets: [{
-                label: 'Entregas',
-                data: [10, 15, 7, 12, 20],
-                backgroundColor: 'rgba(13, 110, 253, 0.6)',
-                borderColor: 'rgba(13, 110, 253, 1)',
-                borderWidth: 1
+              label: t.indicador,
+              data: serie.data,
+              borderColor: serie.color || "#0d6efd",
+              backgroundColor: serie.color || "#0d6efd",
+              fill: serie.fill || false,
+              tension: 0.3
             }]
-        },
-        options: {
+          },
+          options: {
             responsive: true,
             scales: {
-                y: { beginAtZero: true }
+              y: { beginAtZero: true }
             }
-        }
-    });
+          }
+        });
+
+        charts.push(chart);
+      }
+    } catch (error) {
+      debug.innerText += `❌ Error al cargar KPIs: ${error.message}\n`;
+    }
+  }
 </script>
 {% endblock %}

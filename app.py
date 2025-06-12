@@ -7,6 +7,17 @@ import os
 from dotenv import load_dotenv
 from io import BytesIO
 from functools import wraps
+from datetime import datetime, timedelta
+from datetime import date
+from notificaciones import enviar_push
+import re
+import logging
+
+# Configurar logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+
 
 load_dotenv()
 
@@ -62,6 +73,17 @@ def logout():
 @login_required
 def dashboard():
     sector_id = request.args.get('sector_id', type=int, default=1)
+    fecha_inicio = request.args.get('fecha_inicio')
+    fecha_fin = request.args.get('fecha_fin')
+
+    # Si no hay fechas, usar últimos 7 días
+    hoy = datetime.today().date()
+    if not fecha_inicio or not fecha_fin:
+        fecha_fin = hoy
+        fecha_inicio = hoy - timedelta(days=6)
+    else:
+        fecha_inicio = datetime.strptime(fecha_inicio, '%Y-%m-%d').date()
+        fecha_fin = datetime.strptime(fecha_fin, '%Y-%m-%d').date()
 
     sectores = [
         (1, "Entrega"),
@@ -73,12 +95,7 @@ def dashboard():
     conn = get_connection()
     cursor = conn.cursor(dictionary=True)
 
-    # Traer indicadores activos del sector
-    cursor.execute("""
-        SELECT id, nombre 
-        FROM indicadores 
-        WHERE sector_id = %s AND activo = 1
-    """, (sector_id,))
+    cursor.execute("SELECT id, nombre FROM indicadores WHERE sector_id = %s AND activo = 1", (sector_id,))
     indicadores = cursor.fetchall()
 
     tarjetas = []
@@ -88,7 +105,6 @@ def dashboard():
         indicador_id = indicador['id']
         nombre = indicador['nombre']
 
-        # Valor de hoy
         cursor.execute("""
             SELECT SUM(valor) AS total
             FROM kpis
@@ -97,22 +113,17 @@ def dashboard():
         valor_hoy = cursor.fetchone()['total'] or 0
         tarjetas.append({'nombre': nombre, 'valor': int(valor_hoy)})
 
-        # Tendencia 7 días
         cursor.execute("""
-            SELECT fecha, SUM(valor) AS total
+            SELECT fecha, SUM(valor) as total
             FROM kpis
-            WHERE indicador_id = %s
+            WHERE indicador_id = %s AND fecha BETWEEN %s AND %s
             GROUP BY fecha
-            ORDER BY fecha DESC
-            LIMIT 7
-        """, (indicador_id,))
+            ORDER BY fecha
+        """, (indicador_id, fecha_inicio, fecha_fin))
         rows = cursor.fetchall()
-        if rows:
-            fechas = [r['fecha'].strftime('%d/%m') for r in reversed(rows)]
-            valores = [int(r['total']) for r in reversed(rows)]
-        else:
-            fechas = []
-            valores = []
+
+        fechas = [r['fecha'].strftime('%d/%m') for r in rows]
+        valores = [int(r['total']) for r in rows]
 
         graficos.append({
             'nombre': nombre.capitalize(),
@@ -127,30 +138,51 @@ def dashboard():
         tarjetas=tarjetas,
         graficos=graficos,
         sectores=sectores,
-        sector_id=sector_id
+        sector_id=sector_id,
+        fecha_inicio=fecha_inicio,
+        fecha_fin=fecha_fin
     )
-
-
-
 
 @app.route('/panel', methods=['GET', 'POST'])
 @login_required
 def panel():
-    mensaje_enviado = False
-
     if request.method == 'POST':
-        dni = request.form['dni']
-        mensaje = request.form['mensaje']
+        dni = request.form['dni'].strip()
+        mensaje = request.form['mensaje'].strip()
 
-        conn = get_connection()
-        cursor = conn.cursor()
-        cursor.execute("INSERT INTO avisos (dni, mensaje) VALUES (%s, %s)", (dni, mensaje))
-        conn.commit()
-        cursor.close()
-        conn.close()
-        flash("✅ Aviso enviado correctamente", "success")
-        mensaje_enviado = True
+        if not dni or not mensaje:
+            flash("❌ Todos los campos son obligatorios", "danger")
 
+        elif not dni.isdigit() or not (7 <= len(dni) <= 8):
+            flash("⚠️ El DNI debe tener entre 7 y 8 dígitos numéricos", "warning")
+
+        else:
+            try:
+                conn = get_connection()
+                cursor = conn.cursor()
+
+                # Insertar el aviso
+                cursor.execute("INSERT INTO avisos (dni, mensaje) VALUES (%s, %s)", (dni, mensaje))
+                conn.commit()
+
+                # Buscar el token
+                cursor.execute("SELECT token FROM tokens WHERE dni = %s", (dni,))
+                result = cursor.fetchone()
+
+                if result and result[0]:
+                    token = result[0]
+                    enviar_push(token, "📢 Nuevo aviso", mensaje)
+
+                flash("✅ Aviso enviado correctamente", "success")
+
+            except Exception as e:
+                flash(f"❌ Error al enviar aviso: {str(e)}", "danger")
+
+            finally:
+                cursor.close()
+                conn.close()
+
+    # Obtener últimos 10 avisos
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT dni, mensaje, fecha FROM avisos ORDER BY fecha DESC LIMIT 10")
@@ -158,7 +190,24 @@ def panel():
     cursor.close()
     conn.close()
 
-    return render_template('panel.html', avisos=avisos, mensaje_enviado=mensaje_enviado)
+    return render_template('panel.html', avisos=avisos)
+
+@app.route('/avisos_push')
+@login_required
+def historial_push():
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT dni, titulo, mensaje, fecha
+        FROM avisos_push
+        ORDER BY fecha DESC
+        LIMIT 20
+    """)
+    avisos = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    return render_template('avisos_push.html', avisos=avisos)
+
 
 @app.route('/admin/choferes')
 @login_required
@@ -311,37 +360,18 @@ def kpis(dni):
 def historial_kpis(dni):
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT sector FROM choferes WHERE dni = %s", (dni,))
-    result = cursor.fetchone()
-    if not result:
-        cursor.close()
-        conn.close()
-        return jsonify([])
-
-    sector = result[0]
     cursor.execute("""
-        SELECT fecha, indicador, valor
-        FROM kpis
-        WHERE dni = %s AND sector = %s
-        ORDER BY fecha DESC, indicador
-        LIMIT 100
-    """, (dni, sector))
+        SELECT fecha, indicador_id, valor 
+        FROM kpis 
+        WHERE dni = %s 
+        ORDER BY fecha DESC
+    """, (dni,))
     rows = cursor.fetchall()
-    cursor.close()
-    conn.close()
-
-    historial = {}
-    for fecha, indicador, valor in rows:
-        fecha_str = fecha.strftime('%Y-%m-%d')
-        if fecha_str not in historial:
-            historial[fecha_str] = {}
-        historial[fecha_str][indicador] = valor
-
-    salida = []
-    for fecha in sorted(historial.keys(), reverse=True):
-        salida.append({'fecha': fecha, **historial[fecha]})
-
-    return jsonify(salida)
+    # Retornar JSON
+    return jsonify([
+        {'fecha': r[0].isoformat(), 'indicador_id': r[1], 'valor': float(r[2])}
+        for r in rows
+    ])
 
 @app.route('/avisos/<dni>')
 def avisos(dni):
@@ -363,6 +393,8 @@ def avisos(dni):
 @app.route('/admin/subida', methods=['GET', 'POST'])
 @login_required
 def subida_resultados():
+    registros = []
+
     if request.method == 'POST':
         archivo = request.files['archivo']
         if not archivo or not archivo.filename.endswith('.txt'):
@@ -388,9 +420,10 @@ def subida_resultados():
                         lineas_invalidas += 1
                         continue
 
-                    dni, fecha, sector_id, indicador, valor = partes
+                    dni, fecha, indicador_id, sector_id, valor = partes
 
                     try:
+                        indicador_id = int(indicador_id)
                         sector_id = int(sector_id)
                         valor = float(valor)
                     except ValueError as ve:
@@ -399,16 +432,26 @@ def subida_resultados():
                         continue
 
                     cursor.execute("""
-                        INSERT INTO kpis (dni, fecha, sector_id, indicador, valor)
+                        INSERT INTO kpis (dni, fecha, indicador_id, sector_id, valor)
                         VALUES (%s, %s, %s, %s, %s)
-                    """, (dni, fecha, sector_id, indicador, valor))
+                    """, (dni, fecha, indicador_id, sector_id, valor))
 
+                    # Obtener el nombre del indicador (si no existe, fallback al ID)
+                    cursor.execute("SELECT nombre FROM indicadores WHERE id = %s", (indicador_id,))
+                    resultado = cursor.fetchone()
+                    nombre_indicador = resultado[0] if resultado else f"ID {indicador_id}"
+
+                    registros.append({
+                        'dni': dni,
+                        'fecha': fecha,
+                        'indicador': nombre_indicador,
+                        'valor': valor
+                    })
                     registros_insertados += 1
 
                 except Exception as e:
                     print(f"[Línea {i}] ⚠️ Error SQL: {e} - {decoded}")
                     lineas_invalidas += 1
-                    continue
 
             conn.commit()
             cursor.close()
@@ -422,9 +465,59 @@ def subida_resultados():
         except Exception as e:
             flash(f"❌ Error general al procesar el archivo: {str(e)}", "danger")
 
-    return render_template('subida_resultados.html')
+    return render_template('subida_resultados.html', registros=registros)
 
 
+@app.route('/kpis/hoy_o_ultimo/<dni>')
+def kpis_hoy_o_ultimo(dni):
+    conn = get_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    # Intentar traer el KPI más reciente por indicador de HOY
+    cursor.execute("""
+        SELECT k.fecha, k.indicador_id, i.nombre AS indicador, k.valor
+        FROM kpis k
+        JOIN indicadores i ON k.indicador_id = i.id
+        JOIN (
+            SELECT indicador_id, MAX(id) AS max_id
+            FROM kpis
+            WHERE dni = %s AND fecha = CURDATE()
+            GROUP BY indicador_id
+        ) ult ON k.id = ult.max_id
+        WHERE k.dni = %s
+        ORDER BY i.nombre
+    """, (dni, dni))
+    kpis_hoy = cursor.fetchall()
+
+    if kpis_hoy:
+        return jsonify({"fecha": str(date.today()), "kpis": kpis_hoy})
+
+    # Si no hay KPIs de hoy, buscar el más reciente por indicador
+    cursor.execute("""
+        SELECT k1.fecha, k1.indicador_id, i.nombre AS indicador, k1.valor
+        FROM kpis k1
+        JOIN (
+            SELECT indicador_id, MAX(fecha) AS max_fecha
+            FROM kpis
+            WHERE dni = %s
+            GROUP BY indicador_id
+        ) ult ON k1.indicador_id = ult.indicador_id AND k1.fecha = ult.max_fecha
+        JOIN indicadores i ON k1.indicador_id = i.id
+        JOIN (
+            SELECT indicador_id, MAX(id) AS max_id
+            FROM kpis
+            WHERE dni = %s
+            GROUP BY indicador_id
+        ) maxk ON k1.id = maxk.max_id
+        WHERE k1.dni = %s
+        ORDER BY i.nombre
+    """, (dni, dni, dni))
+    ultimos_kpis = cursor.fetchall()
+
+    cursor.close()
+    conn.close()
+
+    return jsonify({"fecha": "último disponible", "kpis": ultimos_kpis})
 
 
 @app.route('/admin/kpis')
@@ -593,7 +686,508 @@ def editar_indicador(id):
     cursor.close()
     conn.close()
     return render_template("editar_indicador.html", indicador=indicador, sectores=sectores)
-   
+
+
+@app.route('/registrar_token', methods=['POST'])
+def registrar_token():
+    conn = None
+    cursor = None
+    
+    try:
+        # Verificar que la petición contenga JSON
+        if not request.is_json:
+            return jsonify({
+                "status": "error",
+                "mensaje": "Contenido debe ser JSON"
+            }), 400
+        
+        data = request.json
+        
+        # Validar que existan los campos requeridos
+        if not data:
+            return jsonify({
+                "status": "error",
+                "mensaje": "Datos JSON vacíos"
+            }), 400
+            
+        if 'dni' not in data or 'token' not in data:
+            return jsonify({
+                "status": "error",
+                "mensaje": "Faltan campos requeridos: dni y token"
+            }), 400
+        
+        dni = data['dni']
+        token = data['token']
+        
+        # Validar DNI
+        if not dni:
+            return jsonify({
+                "status": "error",
+                "mensaje": "DNI no puede estar vacío"
+            }), 400
+            
+        # Convertir DNI a string y validar formato (ejemplo para DNI argentino: 8 dígitos)
+        dni_str = str(dni).strip()
+        if not re.match(r'^\d{7,8}$', dni_str):
+            return jsonify({
+                "status": "error",
+                "mensaje": "DNI debe contener entre 7 y 8 dígitos"
+            }), 400
+        
+        # Validar token
+        if not token or not isinstance(token, str):
+            return jsonify({
+                "status": "error",
+                "mensaje": "Token debe ser una cadena de texto válida"
+            }), 400
+            
+        token = token.strip()
+        if len(token) < 10:  # Asumiendo longitud mínima del token
+            return jsonify({
+                "status": "error",
+                "mensaje": "Token demasiado corto (mínimo 10 caracteres)"
+            }), 400
+        
+        # Operaciones de base de datos
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        # Verificar si la conexión es válida
+        if not conn or not cursor:
+            raise Exception("Error al conectar con la base de datos")
+        
+        # Ejecutar la consulta
+        cursor.execute("""
+            INSERT INTO tokens (dni, token, fecha_registro, fecha_actualizacion)
+            VALUES (%s, %s, NOW(), NOW())
+            ON DUPLICATE KEY UPDATE 
+                token = VALUES(token),
+                fecha_actualizacion = NOW()
+        """, (dni_str, token))
+        
+        # Verificar si se afectaron filas
+        if cursor.rowcount == 0:
+            raise Exception("No se pudo registrar el token")
+        
+        conn.commit()
+        
+        # Registrar la operación exitosa
+        logger.info(f"Token registrado/actualizado exitosamente para DNI: {dni_str}")
+        
+        return jsonify({
+            "status": "exitoso",
+            "mensaje": "Token registrado correctamente",
+            "dni": dni_str
+        }), 200
+        
+    except ValueError as ve:
+        logger.error(f"Error de validación: {str(ve)}")
+        return jsonify({
+            "status": "error",
+            "mensaje": "Error en la validación de datos"
+        }), 400
+        
+    except Exception as e:
+        logger.error(f"Error al registrar token: {str(e)}")
+        
+        # Rollback si hay transacción activa
+        if conn:
+            try:
+                conn.rollback()
+            except:
+                pass
+                
+        return jsonify({
+            "status": "error",
+            "mensaje": "Error interno del servidor"
+        }), 500
+        
+    finally:
+        # Cerrar recursos de base de datos
+        if cursor:
+            try:
+                cursor.close()
+            except Exception as e:
+                logger.error(f"Error cerrando cursor: {str(e)}")
+                
+        if conn:
+            try:
+                conn.close()
+            except Exception as e:
+                logger.error(f"Error cerrando conexión: {str(e)}")
+
+
+# Función auxiliar para validar DNI más específicamente (opcional)
+def validar_dni_argentino(dni):
+    """
+    Valida formato de DNI argentino y calcula dígito verificador si es necesario
+    """
+    dni_str = str(dni).strip()
+    
+    # Verificar que solo contenga dígitos
+    if not dni_str.isdigit():
+        return False
+    
+    # Verificar longitud (7-8 dígitos)
+    if len(dni_str) < 7 or len(dni_str) > 8:
+        return False
+    
+    # Aquí podrías agregar validación del dígito verificador si lo necesitas
+    
+    return True
+
+
+# Endpoint adicional para verificar si un token existe (opcional)
+@app.route('/verificar_token', methods=['GET'])
+def verificar_token():
+    dni = request.args.get('dni')
+    
+    if not dni:
+        return jsonify({
+            "status": "error",
+            "mensaje": "DNI requerido"
+        }), 400
+    
+    conn = None
+    cursor = None
+    
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("SELECT token FROM tokens WHERE dni = %s", (dni,))
+        resultado = cursor.fetchone()
+        
+        if resultado:
+            return jsonify({
+                "status": "exitoso",
+                "existe": True,
+                "dni": dni
+            }), 200
+        else:
+            return jsonify({
+                "status": "exitoso",
+                "existe": False,
+                "dni": dni
+            }), 200
+            
+    except Exception as e:
+        logger.error(f"Error verificando token: {str(e)}")
+        return jsonify({
+            "status": "error",
+            "mensaje": "Error interno del servidor"
+        }), 500
+        
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+
+
+@app.route('/avisos_push', methods=['GET', 'POST'])
+@login_required
+def avisos_push():
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    if request.method == 'POST':
+        dni = request.form['dni'].strip()
+        mensaje = request.form['mensaje'].strip()
+        titulo = "📢 Nuevo aviso"
+
+        if not dni or not mensaje:
+            flash("❌ Todos los campos son obligatorios", "danger")
+            return redirect(url_for('avisos_push'))
+
+        # Buscar token FCM
+        cursor.execute("SELECT token FROM tokens WHERE dni = %s", (dni,))
+        fila = cursor.fetchone()
+
+        if not fila or not fila[0]:
+            flash(f"⚠️ No se encontró token registrado para el DNI {dni}", "warning")
+            return redirect(url_for('avisos_push'))
+
+        token = fila[0]
+
+        try:
+            status_code, respuesta = enviar_push(token, titulo, mensaje)
+
+            if status_code == 200:
+                cursor.execute("""
+                    INSERT INTO avisos_push (dni, titulo, mensaje)
+                    VALUES (%s, %s, %s)
+                """, (dni, titulo, mensaje))
+                conn.commit()
+                flash("✅ Aviso push enviado correctamente", "success")
+            else:
+                flash(f"❌ Error al enviar push: {respuesta}", "danger")
+
+        except Exception as e:
+            flash(f"❌ Error inesperado: {e}", "danger")
+
+        return redirect(url_for('avisos_push'))
+
+    # Mostrar últimos avisos
+    cursor.execute("""
+        SELECT dni, titulo, mensaje, fecha
+        FROM avisos_push
+        ORDER BY fecha DESC
+        LIMIT 20
+    """)
+    historial = cursor.fetchall()
+
+    cursor.close()
+    conn.close()
+    return render_template("avisos_push.html", historial=historial)
+
+
+@app.route('/api/indicadores_activos/<int:sector_id>')
+def api_indicadores_activos(sector_id):
+    """
+    Devuelve los indicadores activos (id, nombre) de un sector en formato JSON.
+    """
+    conn = get_connection()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("""
+        SELECT id, nombre
+        FROM indicadores
+        WHERE sector_id = %s AND activo = 1
+        ORDER BY nombre
+    """, (sector_id,))
+    data = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    return jsonify(data)
+
+@app.route('/kpis/historial_detallado/<dni>')
+def historial_kpis_detallado(dni):
+    """
+    Devuelve historial de KPIs con el nombre del indicador en lugar del ID.
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT k.fecha, i.nombre AS indicador, k.valor
+        FROM kpis k
+        JOIN indicadores i ON k.indicador_id = i.id
+        WHERE k.dni = %s
+        ORDER BY k.fecha DESC
+    """, (dni,))
+    rows = cursor.fetchall()
+    cursor.close()
+    conn.close()
+
+    return jsonify([
+        {'fecha': r[0].isoformat(), 'indicador': r[1], 'valor': float(r[2])}
+        for r in rows
+    ])
+    
+# ────────────────────────────────────────────────────────────────
+# 1. Resumen compacto – tarjetas (suma en el rango):
+#    /api/resumen_dashboard?sector_id=2&from=2025-06-01&to=2025-06-10
+# ────────────────────────────────────────────────────────────────
+@app.route('/api/resumen_dashboard')
+def api_resumen_dashboard():
+    try:
+        sector_id = int(request.args.get('sector_id', 1))
+        fecha_ini = request.args.get('from')
+        fecha_fin = request.args.get('to')
+
+        if not fecha_ini or not fecha_fin:
+            return jsonify({'tarjetas': []})  # parámetros incompletos
+
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        cursor.execute("""
+            SELECT id, nombre, tipo_grafico, color_grafico, fill_grafico
+            FROM indicadores
+            WHERE sector_id = %s AND activo = 1
+        """, (sector_id,))
+        indicadores = cursor.fetchall()
+
+        if not indicadores:
+            return jsonify({'tarjetas': []})  # no hay indicadores activos
+
+        tarjetas = []
+        for ind in indicadores:
+            cursor.execute("""
+                SELECT ROUND(AVG(valor), 2) AS promedio
+                FROM kpis
+                WHERE indicador_id = %s AND sector_id = %s
+                  AND fecha BETWEEN %s AND %s
+            """, (ind['id'], sector_id, fecha_ini, fecha_fin))
+            resultado = cursor.fetchone()
+            tarjetas.append({
+                'indicador': ind['nombre'],
+                'valor': float(resultado['promedio'] or 0),
+                'indicador_id': ind['id'],
+                'tipo': ind['tipo_grafico'],
+                'color': ind['color_grafico'],
+                'fill': bool(ind['fill_grafico']),
+            })
+
+        cursor.close()
+        conn.close()
+        return jsonify({'tarjetas': tarjetas})
+
+    except Exception as e:
+        logger.error(f"Error en resumen_dashboard: {e}")
+        return jsonify({'error': 'Error interno en resumen_dashboard'}), 500
+
+
+
+# ────────────────────────────────────────────────────────────────
+# 2. Serie histórica por indicador:
+#    /api/serie_indicador?indicador_id=1&sector_id=2&from=2025-06-01&to=2025-06-10
+# ────────────────────────────────────────────────────────────────
+@app.route('/api/serie_indicador')
+def api_serie_indicador():
+    try:
+        indicador_id = int(request.args.get('indicador_id'))
+        sector_id    = int(request.args.get('sector_id'))
+        fecha_ini    = request.args.get('from')
+        fecha_fin    = request.args.get('to')
+
+        if not (fecha_ini and fecha_fin):
+            return jsonify({'labels': [], 'data': [], 'indicador': 'Sin datos'})
+
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        cursor.execute("""
+            SELECT nombre, tipo_grafico, color_grafico, fill_grafico
+            FROM indicadores
+            WHERE id = %s
+        """, (indicador_id,))
+        ind = cursor.fetchone()
+
+        if not ind:
+            return jsonify({'labels': [], 'data': [], 'indicador': 'Desconocido'})
+
+        cursor.execute("""
+            SELECT fecha, ROUND(AVG(valor), 2) AS promedio
+              FROM kpis
+             WHERE indicador_id = %s AND sector_id = %s
+               AND fecha BETWEEN %s AND %s
+          GROUP BY fecha
+          ORDER BY fecha
+        """, (indicador_id, sector_id, fecha_ini, fecha_fin))
+        rows = cursor.fetchall()
+
+        etiquetas = [r['fecha'].strftime('%d/%m') for r in rows]
+        valores   = [float(r['promedio']) for r in rows]
+
+        cursor.close()
+        conn.close()
+
+        return jsonify({
+            'indicador': ind['nombre'],
+            'labels': etiquetas,
+            'data': valores,
+            'tipo': ind['tipo_grafico'],
+            'color': ind['color_grafico'],
+            'fill': bool(ind['fill_grafico'])
+        })
+
+    except Exception as e:
+        logger.error(f"Error en serie_indicador: {e}")
+        return jsonify({'labels': [], 'data': [], 'indicador': 'Error'}), 500
+    
+    
+@app.route('/api/historial_kpi_empleado')
+def historial_kpi_empleado():
+    try:
+        dni = request.args.get('dni')
+        if not dni:
+            return jsonify({'error': 'DNI requerido'}), 400
+
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        cursor.execute("""
+            SELECT k.indicador_id, i.nombre, i.tipo_grafico, i.color_grafico, i.fill_grafico,
+                   k.fecha, ROUND(AVG(k.valor), 2) AS valor
+              FROM kpis k
+              JOIN indicadores i ON k.indicador_id = i.id
+             WHERE k.dni = %s
+          GROUP BY k.indicador_id, k.fecha
+          ORDER BY k.indicador_id, k.fecha
+        """, (dni,))
+        rows = cursor.fetchall()
+
+        datos = {}
+        for row in rows:
+            ind_id = row['indicador_id']
+            if ind_id not in datos:
+                datos[ind_id] = {
+                    'nombre': row['nombre'],
+                    'tipo': row['tipo_grafico'],
+                    'color': row['color_grafico'],
+                    'fill': bool(row['fill_grafico']),
+                    'labels': [],
+                    'data': []
+                }
+            datos[ind_id]['labels'].append(row['fecha'].strftime('%d/%m'))
+            datos[ind_id]['data'].append(float(row['valor']))
+
+        return jsonify({'indicadores': list(datos.values())})
+
+    except Exception as e:
+        logger.error(f"Error en historial_kpi_empleado: {e}")
+        return jsonify({'error': 'Error interno'}), 500
+    
+@app.route('/api/kpis_por_dni/<dni>')
+def api_kpis_por_dni(dni):
+    try:
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        # Obtener sector del empleado
+        cursor.execute("SELECT sector FROM choferes WHERE dni = %s", (dni,))
+        row = cursor.fetchone()
+        if not row:
+            return jsonify({'error': 'Empleado no encontrado'}), 404
+
+        sector_id = row['sector']
+
+        # Obtener indicadores activos para ese sector
+        cursor.execute("""
+            SELECT id, nombre, tipo_grafico, color_grafico, fill_grafico
+            FROM indicadores
+            WHERE sector_id = %s AND activo = 1
+        """, (sector_id,))
+        indicadores = cursor.fetchall()
+
+        tarjetas = []
+
+        for ind in indicadores:
+            cursor.execute("""
+                SELECT ROUND(AVG(valor), 2) AS promedio
+                FROM kpis
+                WHERE indicador_id = %s AND dni = %s
+            """, (ind['id'], dni))
+            resultado = cursor.fetchone()
+
+            tarjetas.append({
+                'indicador_id': ind['id'],
+                'indicador': ind['nombre'],
+                'valor': float(resultado['promedio'] or 0),
+                'tipo': ind['tipo_grafico'],
+                'color': ind['color_grafico'],
+                'fill': bool(ind['fill_grafico']),
+            })
+
+        cursor.close()
+        conn.close()
+        return jsonify({'tarjetas': tarjetas})
+
+    except Exception as e:
+        logger.error(f"Error en kpis_por_dni: {e}")
+        return jsonify({'error': 'Error interno'}), 500
+
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)

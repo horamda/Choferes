@@ -61,30 +61,40 @@
 </head>
 <body>
     <!-- Sidebar -->
-    <div class="sidebar">
-        <h4>🚛 Admin</h4>
-        <a href="{{ url_for('dashboard') }}"
-           class="{% if request.path == url_for('dashboard') %}active{% endif %}">
-           <i class="bi bi-speedometer2"></i> Dashboard</a>
-        <a href="{{ url_for('panel') }}"
-           class="{% if request.path == url_for('panel') %}active{% endif %}">
-           <i class="bi bi-megaphone"></i> Avisos</a>
-        <a href="{{ url_for('listar_choferes') }}"
-           class="{% if request.path == url_for('listar_choferes') %}active{% endif %}">
-           <i class="bi bi-people"></i> Empleados</a>
-        <a href="{{ url_for('vista_kpis') }}"
-           class="{% if request.path == url_for('vista_kpis') %}active{% endif %}">
-           <i class="bi bi-bar-chart-line"></i> KPIs</a>
-        <a href="{{ url_for('subida_resultados') }}"
-           class="{% if request.path == url_for('subida_resultados') %}active{% endif %}">
-           <i class="bi bi-upload"></i> Subida Resultados</a>
-        <a href="{{ url_for('admin_indicadores') }}"
-           class="{% if request.path.startswith('/admin/indicadores') %}active{% endif %}">
-           <i class="bi bi-sliders"></i> Indicadores</a>
-        <a href="{{ url_for('logout') }}"
-           class="{% if request.path == url_for('logout') %}active{% endif %}">
-           <i class="bi bi-box-arrow-right"></i> Cerrar sesión</a>
-    </div>
+   <div class="sidebar">
+    <h4>🚛 Admin</h4>
+    <a href="{{ url_for('dashboard') }}"
+       class="{% if request.path == url_for('dashboard') %}active{% endif %}">
+       <i class="bi bi-speedometer2"></i> Dashboard</a>
+
+    <a href="{{ url_for('panel') }}"
+       class="{% if request.path == url_for('panel') %}active{% endif %}">
+       <i class="bi bi-megaphone"></i> Cargar Avisos</a>
+
+    <a href="{{ url_for('historial_push') }}"
+       class="{% if request.path == url_for('historial_push') %}active{% endif %}">
+       <i class="bi bi-bell-fill"></i> Historial Push</a>
+
+    <a href="{{ url_for('listar_choferes') }}"
+       class="{% if request.path == url_for('listar_choferes') %}active{% endif %}">
+       <i class="bi bi-people"></i> Empleados</a>
+
+    <a href="{{ url_for('vista_kpis') }}"
+       class="{% if request.path == url_for('vista_kpis') %}active{% endif %}">
+       <i class="bi bi-bar-chart-line"></i> KPIs</a>
+
+    <a href="{{ url_for('subida_resultados') }}"
+       class="{% if request.path == url_for('subida_resultados') %}active{% endif %}">
+       <i class="bi bi-upload"></i> Subida Resultados</a>
+
+    <a href="{{ url_for('admin_indicadores') }}"
+       class="{% if request.path.startswith('/admin/indicadores') %}active{% endif %}">
+       <i class="bi bi-sliders"></i> Indicadores</a>
+
+    <a href="{{ url_for('logout') }}"
+       class="{% if request.path == url_for('logout') %}active{% endif %}">
+       <i class="bi bi-box-arrow-right"></i> Cerrar sesión</a>
+</div>
 
     <!-- Contenido principal -->
     <div class="content">

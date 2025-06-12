@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}Dashboard General{% endblock %}
+{% block header %}📊 Dashboard General{% endblock %}
+
+{% block content %}
+
+<!-- Selector de sector -->
+<form method="get" class="row g-3 align-items-end mb-4">
+    <div class="col-auto">
+        <label class="form-label">Sector</label>
+        <select name="sector_id" class="form-select" required>
+            {% for id, nombre in sectores %}
+                <option value="{{ id }}" {% if id == sector_id %}selected{% endif %}>{{ nombre }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="col-auto">
+        <label class="form-label">Desde</label>
+        <input type="date" name="fecha_inicio" value="{{ fecha_inicio }}" class="form-control">
+    </div>
+    <div class="col-auto">
+        <label class="form-label">Hasta</label>
+        <input type="date" name="fecha_fin" value="{{ fecha_fin }}" class="form-control">
+    </div>
+    <div class="col-auto">
+        <button type="submit" class="btn btn-primary">Actualizar</button>
+    </div>
+</form>
+
+
+{% if tarjetas %}
+<div class="row mb-4">
+    {% for t in tarjetas %}
+    <div class="col-md-4 mb-3">
+        <div class="card text-white bg-primary">
+            <div class="card-body">
+                <h5 class="card-title text-capitalize">{{ t.nombre }}</h5>
+                <h2>{{ t.valor }}</h2>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<div class="row">
+    {% for g in graficos %}
+    <div class="col-md-6 mb-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">{{ g.nombre }}</h5>
+                {% if g.data %}
+                <canvas id="grafico_{{ loop.index }}"></canvas>
+                {% else %}
+                <div class="alert alert-secondary">No hay datos disponibles para este indicador.</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+{% for g in graficos %}
+{% if g.data %}
+new Chart(document.getElementById('grafico_{{ loop.index }}'), {
+    type: 'line',
+    data: {
+        labels: {{ g.labels|tojson }},
+        datasets: [{
+            label: '{{ g.nombre }}',
+            data: {{ g.data|tojson }},
+            borderColor: '#0d6efd',
+            fill: false,
+            tension: 0.3
+        }]
+    },
+    options: {
+        responsive: true,
+        scales: {
+            y: { beginAtZero: true }
+        }
+    }
+});
+{% endif %}
+{% endfor %}
+</script>
+{% else %}
+<div class="alert alert-warning text-center">
+    No hay indicadores activos en este sector actualmente.
+</div>
+{% endif %}
+{% endblock %}
+
