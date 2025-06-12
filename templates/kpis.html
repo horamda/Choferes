@@ -6,100 +6,120 @@
 <div class="mb-4">
   <label class="form-label">Buscar por DNI</label>
   <div class="input-group">
-    <input type="text" id="dniInput" class="form-control" placeholder="DNI del empleado">
+    <input type="text" id="dniInput" class="form-control" placeholder="DNI del empleado"
+           onkeydown="if(event.key==='Enter') buscarKPIs()">
     <button class="btn btn-primary" onclick="buscarKPIs()">Buscar</button>
   </div>
 </div>
 
-<div id="contenedorTarjetas" class="row mb-4"></div>
+<!-- Info del empleado -->
+<div id="infoEmpleado" class="d-flex align-items-center mb-4" style="display:none;">
+  <img id="fotoEmpleado" class="rounded me-3" style="width:80px;height:80px;object-fit:cover;">
+  <div>
+    <h5 id="nombreEmpleado" class="m-0"></h5>
+    <small id="sectorEmpleado" class="text-muted"></small>
+  </div>
+</div>
+
+<div id="contenedorTarjetas" class="row mb-4 g-3"></div>
 <div id="contenedorGraficos" class="row"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-const charts = [];
+  const charts = [];
+  const slug = s => s.replace(/[^a-zA-Z0-9]/g,'_');
 
-function sanitizeId(str) {
-  return str.replace(/[^a-zA-Z0-9]/g, '_');
-}
+  async function buscarKPIs() {
+    const dni = document.getElementById('dniInput').value.trim();
+    if (!dni) { alert('Por favor ingresa un DNI'); return; }
 
-async function buscarKPIs() {
-  const dni = document.getElementById("dniInput").value.trim();
-  if (!dni) return alert("Por favor ingresa un DNI");
+    // refs DOM
+    const infoDiv = document.getElementById('infoEmpleado');
+    const fotoImg = document.getElementById('fotoEmpleado');
+    const nomLbl  = document.getElementById('nombreEmpleado');
+    const secLbl  = document.getElementById('sectorEmpleado');
+    const tCont   = document.getElementById('contenedorTarjetas');
+    const gCont   = document.getElementById('contenedorGraficos');
 
-  const tarjetasCont = document.getElementById("contenedorTarjetas");
-  const graficosCont = document.getElementById("contenedorGraficos");
+    // limpiar UI previa
+    infoDiv.style.display = 'none';
+    tCont.innerHTML = ''; gCont.innerHTML = '';
+    charts.forEach(c=>c.destroy()); charts.length = 0;
 
-  tarjetasCont.innerHTML = "";
-  graficosCont.innerHTML = "";
-  charts.forEach(c => c.destroy());
-  charts.length = 0;
+    // ── Fetch tarjetas + datos del chofer ──────────────
+    const res  = await fetch(`/api/kpis_por_dni/${dni}`);
+    const json = await res.json();
+    const { chofer={}, tarjetas=[] } = json;
 
-  try {
-    const res = await fetch(`/api/kpis_por_dni/${dni}`);
-    const datos = await res.json();
+    /* Mostrar info chofer si existe */
+    if (Object.keys(chofer).length) {
+      nomLbl.textContent    = chofer.nombre || '(sin nombre)';
+      secLbl.textContent    = chofer.sector || '';
+      if (chofer.foto) {
+        fotoImg.src = chofer.foto;
+        fotoImg.style.display = '';
+      } else {
+        fotoImg.style.display = 'none';
+      }
+      infoDiv.style.display = 'flex';
+    }
 
-    if (!datos.tarjetas || datos.tarjetas.length === 0) {
-      tarjetasCont.innerHTML = '<div class="alert alert-warning text-center">No se encontraron KPIs.</div>';
+    /* Tarjetas */
+    if (!tarjetas.length) {
+      tCont.innerHTML =
+        '<div class="alert alert-warning w-100 text-center">No se encontraron KPIs.</div>';
       return;
     }
 
-    for (const t of datos.tarjetas) {
-      const canvasId = `grafico_${sanitizeId(t.indicador)}`;
+    for (const t of tarjetas) {
+      const cid = 'graf_' + slug(t.indicador);
 
-      tarjetasCont.insertAdjacentHTML("beforeend", `
-        <div class="col-md-3 mb-3">
-          <div class="card text-white bg-primary">
-            <div class="card-body">
-              <h5 class="card-title text-capitalize">${t.indicador}</h5>
-              <h2>${t.valor}</h2>
+      // tarjeta
+      tCont.insertAdjacentHTML('beforeend', `
+        <div class="col-sm-6 col-md-4 col-lg-3">
+          <div class="card text-white" style="background-color:${t.color||'#0d6efd'}">
+            <div class="card-body p-2">
+              <small class="text-uppercase">${t.indicador}</small>
+              <h3 class="m-0">${t.valor}</h3>
             </div>
           </div>
         </div>`);
 
-      graficosCont.insertAdjacentHTML("beforeend", `
+      // contenedor gráfico
+      gCont.insertAdjacentHTML('beforeend', `
         <div class="col-md-6 mb-4">
-          <div class="card">
-            <div class="card-body">
-              <h5 class="card-title">${t.indicador}</h5>
-              <canvas id="${canvasId}"></canvas>
-            </div>
-          </div>
+          <div class="card"><div class="card-body">
+            <h6 class="card-title">${t.indicador}</h6>
+            <canvas id="${cid}"></canvas>
+          </div></div>
         </div>`);
 
-      await new Promise(resolve => setTimeout(resolve, 10));
+      // serie
+      const serieRes = await fetch(
+        `/api/serie_indicador_dni?dni=${dni}` +
+        `&indicador_id=${t.indicador_id}` +
+        `&from=2024-01-01&to=2050-01-01`
+      );
+      const serie = await serieRes.json();
+      if (!serie?.labels?.length) continue;
 
-      const serieResp = await fetch(`/api/serie_indicador?indicador_id=${t.indicador_id}&sector_id=&from=2024-01-01&to=2050-01-01`);
-      const serie = await serieResp.json();
-
-      const ctx = document.getElementById(canvasId)?.getContext("2d");
-      if (!ctx || !serie?.labels?.length) continue;
-
-      const chart = new Chart(ctx, {
-        type: t.tipo || "bar",
+      const ctx = document.getElementById(cid).getContext('2d');
+      charts.push(new Chart(ctx, {
+        type: serie.tipo || 'bar',
         data: {
           labels: serie.labels,
-          datasets: [{
+          datasets:[{
             label: t.indicador,
-            data: serie.data,
-            borderColor: t.color || "#0d6efd",
-            backgroundColor: t.color || "#0d6efd",
-            fill: t.fill || false,
-            tension: 0.3
+            data : serie.data,
+            borderColor: serie.color,
+            backgroundColor: serie.color,
+            fill: serie.fill,
+            tension:.3
           }]
         },
-        options: {
-          responsive: true,
-          scales: {
-            y: { beginAtZero: true }
-          }
-        }
-      });
-
-      charts.push(chart);
+        options:{responsive:true,scales:{y:{beginAtZero:true}}}
+      }));
     }
-  } catch (err) {
-    tarjetasCont.innerHTML = `<div class="alert alert-danger">Error al cargar: ${err.message}</div>`;
   }
-}
 </script>
 {% endblock %}

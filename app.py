@@ -13,6 +13,9 @@ from notificaciones import enviar_push
 import re
 import logging
 from unicodedata import normalize
+import base64
+
+
 
 # Configurar logging
 logging.basicConfig(level=logging.INFO)
@@ -1178,101 +1181,93 @@ def api_serie_indicador():
         return jsonify({'labels': [], 'data': [], 'indicador': 'Error'}), 500
     
     
-@app.route('/api/historial_kpi_empleado')
-def historial_kpi_empleado():
-    try:
-        dni = request.args.get('dni')
-        if not dni:
-            return jsonify({'error': 'DNI requerido'}), 400
+@app.route('/api/serie_indicador_dni')
+@login_required
+def serie_indicador_dni():
+    dni          = request.args.get('dni')
+    indicador_id = request.args.get('indicador_id', type=int)
+    f_ini        = request.args.get('from', default='2024-01-01')
+    f_fin        = request.args.get('to',   default='2050-01-01')
 
-        conn = get_connection()
-        cursor = conn.cursor(dictionary=True)
+    conn = get_connection()
+    cur  = conn.cursor(dictionary=True)
 
-        cursor.execute("""
-            SELECT k.indicador_id, i.nombre, i.tipo_grafico, i.color_grafico, i.fill_grafico,
-                   k.fecha, ROUND(AVG(k.valor), 2) AS valor
-              FROM kpis k
-              JOIN indicadores i ON k.indicador_id = i.id
-             WHERE k.dni = %s
-          GROUP BY k.indicador_id, k.fecha
-          ORDER BY k.indicador_id, k.fecha
-        """, (dni,))
-        rows = cursor.fetchall()
+    # datos de la serie
+    cur.execute("""
+        SELECT fecha, ROUND(SUM(valor),2) total
+          FROM kpis
+         WHERE dni = %s
+           AND indicador_id = %s
+           AND fecha BETWEEN %s AND %s
+      GROUP BY fecha
+      ORDER BY fecha
+    """, (dni, indicador_id, f_ini, f_fin))
+    rows = cur.fetchall()
 
-        datos = {}
-        for row in rows:
-            ind_id = row['indicador_id']
-            if ind_id not in datos:
-                datos[ind_id] = {
-                    'nombre': row['nombre'],
-                    'tipo': row['tipo_grafico'],
-                    'color': row['color_grafico'],
-                    'fill': bool(row['fill_grafico']),
-                    'labels': [],
-                    'data': []
-                }
-            datos[ind_id]['labels'].append(row['fecha'].strftime('%d/%m'))
-            datos[ind_id]['data'].append(float(row['valor']))
+    # estilo del indicador
+    cur.execute("""
+        SELECT color_grafico color,
+               tipo_grafico  tipo,
+               fill_grafico  fill
+          FROM indicadores
+         WHERE id = %s
+    """, (indicador_id,))
+    est = cur.fetchone() or {}
 
-        return jsonify({'indicadores': list(datos.values())})
+    cur.close(); conn.close()
 
-    except Exception as e:
-        logger.error(f"Error en historial_kpi_empleado: {e}")
-        return jsonify({'error': 'Error interno'}), 500
+    return jsonify({
+        'labels': [r['fecha'].strftime('%d/%m') for r in rows],
+        'data'  : [r['total'] for r in rows],
+        'color' : est.get('color', '#0d6efd'),
+        'tipo'  : est.get('tipo',  'bar'),
+        'fill'  : bool(est.get('fill', 0))
+    })
     
+
 @app.route('/api/kpis_por_dni/<dni>')
-def api_kpis_por_dni(dni):
-    try:
-        fecha_ini = request.args.get('from')
-        fecha_fin = request.args.get('to')
+@login_required
+def kpis_por_dni(dni):
+    conn   = get_connection()
+    cur    = conn.cursor(dictionary=True)
 
-        if not fecha_ini or not fecha_fin:
-            return jsonify({'tarjetas': []})  # Faltan parámetros
+    # ── Datos del chofer ───────────────────────────────
+    cur.execute("""
+        SELECT nombre, sector, imagen
+          FROM choferes
+         WHERE dni = %s
+        LIMIT 1
+    """, (dni,))
+    chofer = cur.fetchone() or {}
 
-        conn = get_connection()
-        cursor = conn.cursor(dictionary=True)
+    # Convertir imagen a base64 y quitar el campo bytes
+    if chofer.get('imagen'):
+        chofer['foto'] = (
+            "data:image/jpeg;base64," +
+            base64.b64encode(chofer['imagen']).decode()
+        )
+    else:
+        chofer['foto'] = None
+    chofer.pop('imagen', None)        # ← elimina clave que contiene bytes
 
-        # Detectar sector automáticamente desde el DNI
-        cursor.execute("SELECT sector FROM choferes WHERE dni = %s", (dni,))
-        resultado = cursor.fetchone()
-        if not resultado:
-            return jsonify({'tarjetas': []})  # No se encontró el empleado
-        sector = resultado['sector']
+    # ── KPIs agregados ────────────────────────────────
+    cur.execute("""
+        SELECT i.id indicador_id,
+               i.nombre indicador,
+               i.color_grafico color,
+               i.tipo_grafico  tipo,
+               i.fill_grafico  fill,
+               ROUND(SUM(k.valor),2) valor
+          FROM kpis k
+          JOIN indicadores i ON i.id = k.indicador_id
+         WHERE k.dni = %s
+      GROUP BY i.id, i.nombre, i.color_grafico, i.tipo_grafico, i.fill_grafico
+    """, (dni,))
+    tarjetas = [dict(r) for r in cur.fetchall()]
 
-        # Obtener indicadores activos de ese sector
-        cursor.execute("""
-            SELECT id, nombre, tipo_grafico, color_grafico, fill_grafico
-            FROM indicadores
-            WHERE sector_id = %s AND activo = 1
-        """, (sector,))
-        indicadores = cursor.fetchall()
+    cur.close(); conn.close()
+    return jsonify({'chofer': chofer, 'tarjetas': tarjetas})
 
-        tarjetas = []
-
-        for ind in indicadores:
-            cursor.execute("""
-                SELECT ROUND(AVG(valor), 2) AS promedio
-                FROM kpis
-                WHERE dni = %s AND indicador_id = %s AND sector_id = %s
-                  AND fecha BETWEEN %s AND %s
-            """, (dni, ind['id'], sector, fecha_ini, fecha_fin))
-            resultado = cursor.fetchone()
-            tarjetas.append({
-                'indicador': ind['nombre'],
-                'valor': float(resultado['promedio'] or 0),
-                'indicador_id': ind['id'],
-                'tipo': ind['tipo_grafico'],
-                'color': ind['color_grafico'],
-                'fill': bool(ind['fill_grafico']),
-            })
-
-        cursor.close()
-        conn.close()
-        return jsonify({'tarjetas': tarjetas})
-
-    except Exception as e:
-        logger.error(f"Error en kpis_por_dni: {e}")
-        return jsonify({'error': 'Error interno'}), 500
     
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
