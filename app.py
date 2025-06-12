@@ -1145,15 +1145,14 @@ def api_kpis_por_dni(dni):
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
 
-        # Obtener sector del empleado
+        # Obtener el sector del empleado
         cursor.execute("SELECT sector FROM choferes WHERE dni = %s", (dni,))
-        row = cursor.fetchone()
-        if not row:
-            return jsonify({'error': 'Empleado no encontrado'}), 404
+        result = cursor.fetchone()
+        if not result:
+            return jsonify({"error": "Empleado no encontrado"}), 404
+        sector_id = result["sector"]
 
-        sector_id = row['sector']
-
-        # Obtener indicadores activos para ese sector
+        # Obtener indicadores activos del sector
         cursor.execute("""
             SELECT id, nombre, tipo_grafico, color_grafico, fill_grafico
             FROM indicadores
@@ -1162,32 +1161,33 @@ def api_kpis_por_dni(dni):
         indicadores = cursor.fetchall()
 
         tarjetas = []
-
         for ind in indicadores:
             cursor.execute("""
-                SELECT ROUND(AVG(valor), 2) AS promedio
+                SELECT valor
                 FROM kpis
-                WHERE indicador_id = %s AND dni = %s
-            """, (ind['id'], dni))
-            resultado = cursor.fetchone()
+                WHERE dni = %s AND indicador_id = %s
+                ORDER BY fecha DESC
+                LIMIT 1
+            """, (dni, ind["id"]))
+            valor_row = cursor.fetchone()
+            valor = float(valor_row["valor"]) if valor_row else 0
 
             tarjetas.append({
-                'indicador_id': ind['id'],
-                'indicador': ind['nombre'],
-                'valor': float(resultado['promedio'] or 0),
-                'tipo': ind['tipo_grafico'],
-                'color': ind['color_grafico'],
-                'fill': bool(ind['fill_grafico']),
+                "indicador": ind["nombre"],
+                "valor": valor,
+                "indicador_id": ind["id"],
+                "tipo": ind["tipo_grafico"],
+                "color": ind["color_grafico"],
+                "fill": bool(ind["fill_grafico"])
             })
 
         cursor.close()
         conn.close()
-        return jsonify({'tarjetas': tarjetas})
+        return jsonify({"tarjetas": tarjetas})
 
     except Exception as e:
-        logger.error(f"Error en kpis_por_dni: {e}")
-        return jsonify({'error': 'Error interno'}), 500
-
+        logger.error(f"Error en /api/kpis_por_dni: {e}")
+        return jsonify({"error": "Error interno"}), 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
