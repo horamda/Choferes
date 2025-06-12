@@ -1,36 +1,70 @@
 {% extends "base.html" %}
-
 {% block title %}Nuevo Indicador{% endblock %}
 {% block header %}➕ Crear Indicador{% endblock %}
 
 {% block content %}
 <div class="container mt-4">
-    <form method="POST">
-        <div class="mb-3">
-            <label class="form-label">Nombre del Indicador</label>
-            <input type="text" name="nombre" class="form-control" required>
-        </div>
+  <form method="POST" class="row g-3 needs-validation" novalidate>
+    <!-- Nombre -->
+    <div class="col-12">
+      <label class="form-label">Nombre del Indicador</label>
+      <input type="text" name="nombre" class="form-control" required
+             placeholder="Ej. % ERRORES"
+             value="{{ form.nombre }}">
+      <div class="invalid-feedback">Ingrese un nombre.</div>
+    </div>
 
-        <div class="mb-3">
-            <label class="form-label">Sector</label>
-            <select name="sector_id" class="form-select" required>
-                <option value="">-- Seleccionar sector --</option>
-                {% for id, nombre in sectores %}
-                    <option value="{{ id }}">{{ nombre }}</option>
-                {% endfor %}
-            </select>
-        </div>
+    <!-- Sector -->
+    <div class="col-md-6">
+      <label class="form-label">Sector</label>
+      <select name="sector_id" class="form-select" required>
+        <option value="" disabled
+                {% if not form.sector_id %}selected{% endif %}>
+          -- Seleccionar sector --
+        </option>
+        {% for s in sectores %}
+          <option value="{{ s.id }}"
+            {% if s.id|string == form.sector_id %}selected{% endif %}>
+            {{ s.nombre }}
+          </option>
+        {% endfor %}
+      </select>
+      <div class="invalid-feedback">Seleccione un sector.</div>
+    </div>
 
-        <div class="mb-3">
-            <label class="form-label">Estado inicial</label>
-            <select name="activo" class="form-select" required>
-                <option value="1">Activo</option>
-                <option value="0">Inactivo</option>
-            </select>
-        </div>
+    <!-- Estado -->
+    <div class="col-md-6">
+      <label class="form-label">Estado inicial</label>
+      <select name="activo" class="form-select" required>
+        <option value="1" {% if form.activo == '1' %}selected{% endif %}>
+          Activo
+        </option>
+        <option value="0" {% if form.activo == '0' %}selected{% endif %}>
+          Inactivo
+        </option>
+      </select>
+    </div>
 
-        <button type="submit" class="btn btn-primary">Crear Indicador</button>
-        <a href="{{ url_for('admin_indicadores') }}" class="btn btn-secondary">Cancelar</a>
-    </form>
+   <!-- Botones -->
+<div class="col-12">
+  <button type="submit" class="btn btn-primary">Crear Indicador</button>
+  <a href="{{ url_for('admin_indicadores') }}" class="btn btn-secondary">
+     Cancelar
+  </a>
 </div>
+  </form>
+</div>
+
+<script>
+  (() => {
+    'use strict';
+    const forms = document.querySelectorAll('.needs-validation');
+    Array.from(forms).forEach(f => {
+      f.addEventListener('submit', e => {
+        if (!f.checkValidity()) { e.preventDefault(); e.stopPropagation(); }
+        f.classList.add('was-validated');
+      }, false);
+    });
+  })();
+</script>
 {% endblock %}

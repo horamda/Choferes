@@ -5,31 +5,67 @@
 
 {% block content %}
 <div class="container mt-4">
-    <form method="POST">
-        <div class="mb-3">
-            <label class="form-label">Nombre del Indicador</label>
-            <input type="text" name="nombre" class="form-control" value="{{ indicador.nombre }}" required>
-        </div>
+  <form method="POST" class="row g-3 needs-validation" novalidate>
 
-        <div class="mb-3">
-            <label class="form-label">Sector</label>
-            <select name="sector_id" class="form-select" required>
-                {% for id, nombre in sectores %}
-                    <option value="{{ id }}" {% if id == indicador.sector_id %}selected{% endif %}>{{ nombre }}</option>
-                {% endfor %}
-            </select>
-        </div>
+    <!-- Nombre -->
+    <div class="col-12">
+      <label class="form-label">Nombre del Indicador</label>
+      <input type="text"
+             name="nombre"
+             class="form-control"
+             value="{{ indicador.nombre }}"
+             required>
+      <div class="invalid-feedback">Ingrese un nombre.</div>
+    </div>
 
-        <div class="mb-3">
-            <label class="form-label">Estado</label>
-            <select name="activo" class="form-select" required>
-                <option value="1" {% if indicador.activo %}selected{% endif %}>Activo</option>
-                <option value="0" {% if not indicador.activo %}selected{% endif %}>Inactivo</option>
-            </select>
-        </div>
+    <!-- Sector -->
+    <div class="col-md-6">
+      <label class="form-label">Sector</label>
+      <select name="sector_id" class="form-select" required>
+        {% for s in sectores %}
+          <option value="{{ s.id }}"
+            {% if s.id == indicador.sector_id %}selected{% endif %}>
+            {{ s.nombre }}
+          </option>
+        {% endfor %}
+      </select>
+      <div class="invalid-feedback">Seleccione un sector.</div>
+    </div>
 
-        <button type="submit" class="btn btn-primary">Guardar Cambios</button>
-        <a href="{{ url_for('admin_indicadores') }}" class="btn btn-secondary">Cancelar</a>
-    </form>
+    <!-- Estado -->
+    <div class="col-md-6">
+      <label class="form-label">Estado</label>
+      <select name="activo" class="form-select" required>
+        <option value="1" {% if indicador.activo %}selected{% endif %}>
+          Activo
+        </option>
+        <option value="0" {% if not indicador.activo %}selected{% endif %}>
+          Inactivo
+        </option>
+      </select>
+    </div>
+
+    <!-- Botones -->
+    <div class="col-12">
+      <button type="submit" class="btn btn-primary">Guardar Cambios</button>
+      <a href="{{ url_for('admin_indicadores') }}" class="btn btn-secondary">
+        Cancelar
+      </a>
+    </div>
+  </form>
 </div>
+
+<!-- Validación Bootstrap opcional -->
+<script>
+  (() => {
+    'use strict';
+    const forms = document.querySelectorAll('.needs-validation');
+    Array.from(forms).forEach(f => {
+      f.addEventListener('submit', e => {
+        if (!f.checkValidity()) { e.preventDefault(); e.stopPropagation(); }
+        f.classList.add('was-validated');
+      }, false);
+    });
+  })();
+</script>
 {% endblock %}

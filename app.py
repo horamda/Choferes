@@ -12,6 +12,7 @@ from datetime import date
 from notificaciones import enviar_push
 import re
 import logging
+from unicodedata import normalize
 
 # Configurar logging
 logging.basicConfig(level=logging.INFO)
@@ -69,80 +70,121 @@ def logout():
     session.pop('admin', None)
     return redirect(url_for('login_admin'))
 
+def login_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if 'admin' not in session:
+            return redirect(url_for('login_admin'))
+        return f(*args, **kwargs)
+    return decorated
+
+def slug(txt: str) -> str:
+    """Normaliza y quita tildes para comparar sin importar mayúsculas."""
+    if txt is None:     # por si viene None
+        return ''
+    txt = normalize('NFKD', txt).encode('ascii', 'ignore').decode('ascii')
+    return txt.lower().strip()
+
 @app.route('/dashboard')
 @login_required
 def dashboard():
-    sector_id = request.args.get('sector_id', type=int, default=1)
-    fecha_inicio = request.args.get('fecha_inicio')
-    fecha_fin = request.args.get('fecha_fin')
+    # ───────────────────── 1) Parámetro de entrada ─────────────────────
+    sector_nombre_raw = request.args.get('sector_nombre', default=None, type=str)
 
-    # Si no hay fechas, usar últimos 7 días
-    hoy = datetime.today().date()
-    if not fecha_inicio or not fecha_fin:
-        fecha_fin = hoy
-        fecha_inicio = hoy - timedelta(days=6)
-    else:
-        fecha_inicio = datetime.strptime(fecha_inicio, '%Y-%m-%d').date()
-        fecha_fin = datetime.strptime(fecha_fin, '%Y-%m-%d').date()
-
-    sectores = [
-        (1, "Entrega"),
-        (2, "Almacén"),
-        (3, "Administración"),
-        (4, "Mantenimiento"),
-    ]
-
-    conn = get_connection()
+    # ───────────────────── 2) Conexión y lista de sectores ─────────────
+    conn   = get_connection()
     cursor = conn.cursor(dictionary=True)
 
-    cursor.execute("SELECT id, nombre FROM indicadores WHERE sector_id = %s AND activo = 1", (sector_id,))
+    cursor.execute("SELECT id, nombre FROM sectores ORDER BY id")
+    sectores = cursor.fetchall()                        # [{'id':1,'nombre':'Almacén'}, …]
+
+    # Construimos un dict {slug(nombre): id}
+    mapa_nombre_id = { slug(s['nombre']): s['id'] for s in sectores }
+
+    # Resuelve el id (default = primer sector si no hay match)
+    clave = slug(sector_nombre_raw)
+    sector_id      = mapa_nombre_id.get(clave, sectores[0]['id'])
+    sector_nombre  = next( s['nombre'] for s in sectores if s['id'] == sector_id )
+
+    # ───────────────────── 3) Fechas ───────────────────────────────────
+    fi_str = request.args.get('fecha_inicio')
+    ff_str = request.args.get('fecha_fin')
+    hoy = date.today()
+    if not fi_str or not ff_str:
+        fecha_ini, fecha_fin = hoy - timedelta(days=6), hoy
+    else:
+        fecha_ini = datetime.strptime(fi_str, '%Y-%m-%d').date()
+        fecha_fin = datetime.strptime(ff_str, '%Y-%m-%d').date()
+
+    # ───────────────────── 4) Indicadores activos ──────────────────────
+    cursor.execute("""
+        SELECT id, nombre,
+               color_grafico AS color,
+               tipo_grafico  AS tipo,
+               fill_grafico  AS fill
+          FROM indicadores
+         WHERE sector_id = %s AND activo = 1
+        ORDER BY nombre
+    """, (sector_id,))
     indicadores = cursor.fetchall()
 
-    tarjetas = []
-    graficos = []
+    # ───────────────────── 5) Tarjetas y series ────────────────────────
+    tarjetas, graficos = [], []
 
-    for indicador in indicadores:
-        indicador_id = indicador['id']
-        nombre = indicador['nombre']
+    for ind in indicadores:
+        iid, nombre = ind['id'], ind['nombre']
 
+        # Tarjeta (total de hoy)
         cursor.execute("""
-            SELECT SUM(valor) AS total
-            FROM kpis
-            WHERE indicador_id = %s AND fecha = CURDATE()
-        """, (indicador_id,))
-        valor_hoy = cursor.fetchone()['total'] or 0
-        tarjetas.append({'nombre': nombre, 'valor': int(valor_hoy)})
+            SELECT COALESCE(SUM(valor),0) AS total
+              FROM kpis
+             WHERE indicador_id=%s AND sector_id=%s AND fecha=CURDATE()
+        """, (iid, sector_id))
+        total_hoy = cursor.fetchone()['total']
 
+        tarjetas.append({
+            'indicador': nombre,
+            'valor'    : int(total_hoy),
+            'color'    : ind['color'],
+            'tipo'     : ind['tipo'],
+            'fill'     : bool(ind['fill']),
+            'indicador_id': iid          # lo necesita el front
+        })
+
+        # Serie histórica para el gráfico
         cursor.execute("""
-            SELECT fecha, SUM(valor) as total
-            FROM kpis
-            WHERE indicador_id = %s AND fecha BETWEEN %s AND %s
-            GROUP BY fecha
-            ORDER BY fecha
-        """, (indicador_id, fecha_inicio, fecha_fin))
+            SELECT fecha, COALESCE(SUM(valor),0) AS total
+              FROM kpis
+             WHERE indicador_id=%s AND sector_id=%s
+               AND fecha BETWEEN %s AND %s
+          GROUP BY fecha
+          ORDER BY fecha
+        """, (iid, sector_id, fecha_ini, fecha_fin))
         rows = cursor.fetchall()
 
-        fechas = [r['fecha'].strftime('%d/%m') for r in rows]
-        valores = [int(r['total']) for r in rows]
-
         graficos.append({
-            'nombre': nombre.capitalize(),
-            'labels': fechas,
-            'data': valores
+            'indicador': nombre,
+            'labels'   : [r['fecha'].strftime('%d/%m') for r in rows],
+            'data'     : [int(r['total']) for r in rows],
+            'color'    : ind['color'],
+            'tipo'     : ind['tipo'],
+            'fill'     : bool(ind['fill'])
         })
 
     cursor.close()
     conn.close()
 
-    return render_template("dashboard.html",
-        tarjetas=tarjetas,
-        graficos=graficos,
-        sectores=sectores,
-        sector_id=sector_id,
-        fecha_inicio=fecha_inicio,
-        fecha_fin=fecha_fin
+    # ───────────────────── 6) Render ───────────────────────────────────
+    return render_template(
+        'dashboard.html',
+        sectores      = sectores,               # para poblar el <select>
+        sector_nombre = sector_nombre,          # dejar marcado el elegido
+        fecha_inicio  = fecha_ini.strftime('%Y-%m-%d'),
+        fecha_fin     = fecha_fin.strftime('%Y-%m-%d'),
+        tarjetas      = tarjetas,
+        graficos      = graficos
     )
-
+    
 @app.route('/panel', methods=['GET', 'POST'])
 @login_required
 def panel():
@@ -327,21 +369,23 @@ def login_chofer():
 def kpis(dni):
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT sector FROM choferes WHERE dni = %s", (dni,))
+    # 1) Obtener sector_id numérico del chofer
+    cursor.execute("SELECT sector_id FROM choferes WHERE dni = %s", (dni,))
     result = cursor.fetchone()
     if not result:
-        cursor.close()
-        conn.close()
+        cursor.close(); conn.close()
         return jsonify({'message': 'Chofer no encontrado'}), 404
-    sector = result[0]
+    sector_id = result[0]
 
+    # 2) Traer los últimos 20 KPIs, uniendo con indicadores para el nombre
     cursor.execute("""
-        SELECT fecha, indicador, valor
-        FROM kpis
-        WHERE dni = %s AND sector = %s
-        ORDER BY fecha DESC
-        LIMIT 20
-    """, (dni, sector))
+        SELECT k.fecha, i.nombre AS indicador, k.valor
+          FROM kpis k
+          JOIN indicadores i ON k.indicador_id = i.id
+         WHERE k.dni = %s AND k.sector_id = %s
+         ORDER BY k.fecha DESC
+         LIMIT 20
+    """, (dni, sector_id))
     rows = cursor.fetchall()
     cursor.close()
     conn.close()
@@ -349,9 +393,10 @@ def kpis(dni):
     if not rows:
         return jsonify({'message': 'No se encontraron KPIs'}), 404
 
-    fecha = rows[0][0]
-    kpis_dict = {'fecha': fecha.strftime('%Y-%m-%d')}
-    for _, indicador, valor in rows:
+    # Armar el JSON
+    latest_date = rows[0][0].strftime('%Y-%m-%d')
+    kpis_dict = {'fecha': latest_date}
+    for fecha, indicador, valor in rows:
         kpis_dict[indicador] = valor
 
     return jsonify(kpis_dict)
@@ -538,155 +583,193 @@ def testdb():
     except Exception as e:
         return f"❌ Error de conexión: {e}"
     
-    
+    # ─────────────────────── utilidades ────────────────────────
+def cargar_sectores(cursor):
+    """
+    Devuelve:
+      • lista  =  [{'id': 1, 'nombre': 'ALMACEN'}, …]  (ordenada por id)
+      • mapa   =  {1: 'ALMACEN', 2: 'ENTREGA', …}
+    """
+    cursor.execute("SELECT id, nombre FROM sectores ORDER BY id")
+    lista = cursor.fetchall()
+    mapa  = {s['id']: s['nombre'] for s in lista}
+    return lista, mapa
+
+
+def obtener_sectores():
+    """
+    Igual que cargar_sectores, pero abre y cierra conexión.
+    Pensado para usar en las views de 'nuevo' y 'editar'.
+    """
+    conn   = get_connection()
+    cur    = conn.cursor(dictionary=True)
+    lista, _ = cargar_sectores(cur)
+    cur.close()
+    conn.close()
+    return lista
+# ────────────────────────────────────────────────────────────
+
+
+# ╭───────────────────────── LISTADO ─────────────────────────╮
 @app.route('/admin/indicadores', methods=['GET'])
 @login_required
 def admin_indicadores():
     sector_id = request.args.get('sector_id', type=int)
 
-    conn = get_connection()
+    conn   = get_connection()
     cursor = conn.cursor(dictionary=True)
 
-    # Cargar sectores para el filtro (usando tabla estática o hardcoded)
-    sectores = [
-        (1, "Entrega"),
-        (2, "Almacén"),
-        (3, "Administración"),
-        (4, "Mantenimiento"),
-    ]
+    # 1) Sectores verdaderos
+    sectores, mapa_id_nombre = cargar_sectores(cursor)
 
-    # Query indicadores con sector
+    # 2) Indicadores (filtrados o no)
     if sector_id:
         cursor.execute("""
             SELECT i.*, %s AS sector_nombre
-            FROM indicadores i
-            WHERE i.sector_id = %s
-        """, (sectores[sector_id - 1][1], sector_id))
+              FROM indicadores i
+             WHERE i.sector_id = %s
+        """, (mapa_id_nombre.get(sector_id, 'Desconocido'), sector_id))
     else:
-        cursor.execute("SELECT * FROM indicadores")
+        cursor.execute("SELECT *, NULL AS sector_nombre FROM indicadores")
 
     indicadores = cursor.fetchall()
 
-    # Agregar nombre del sector manualmente si no se filtró
+    # 3) Añadir nombre si no se filtró
     if not sector_id:
         for ind in indicadores:
-            ind["sector_nombre"] = next((n for s, n in sectores if s == ind["sector_id"]), "Desconocido")
+            ind['sector_nombre'] = mapa_id_nombre.get(ind['sector_id'], 'Desconocido')
 
-    cursor.close()
-    conn.close()
+    cursor.close(); conn.close()
 
-    return render_template("admin_indicadores.html", indicadores=indicadores, sectores=sectores, sector_id=sector_id)
-@app.route('/admin/indicadores/toggle/<int:id>', methods=['POST'])
-@login_required
-def toggle_indicador(id):
-    conn = get_connection()
-    cursor = conn.cursor()
+    return render_template(
+        "admin_indicadores.html",
+        indicadores = indicadores,
+        sectores    = sectores,   # ← lista real para el combo
+        sector_id   = sector_id
+    )
+# ╰───────────────────────────────────────────────────────────╯
 
-    cursor.execute("SELECT activo FROM indicadores WHERE id = %s", (id,))
-    resultado = cursor.fetchone()
 
-    if resultado:
-        nuevo_estado = 0 if resultado[0] == 1 else 1
-        cursor.execute("UPDATE indicadores SET activo = %s WHERE id = %s", (nuevo_estado, id))
-        conn.commit()
 
-    cursor.close()
-    conn.close()
-    return redirect(url_for('admin_indicadores'))
+# ╭───────────────────────── ALTA ────────────────────────────╮
+# Si NO usas Blueprint, cambia admin_bp por app
+# admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
+
+
 
 @app.route('/admin/indicadores/nuevo', methods=['GET', 'POST'])
 @login_required
 def nuevo_indicador():
-    sectores = [
-        (1, "Entrega"),
-        (2, "Almacén"),
-        (3, "Administración"),
-        (4, "Mantenimiento"),
-    ]
+    sectores = obtener_sectores()
+    form = {"nombre": "", "sector_id": "", "activo": "1"}
 
     if request.method == 'POST':
-        nombre = request.form['nombre'].strip().upper()
-        sector_id = request.form['sector_id']
-        activo = int(request.form['activo'])
+        form["nombre"]    = request.form['nombre'].strip().upper()
+        form["sector_id"] = request.form['sector_id']
+        form["activo"]    = request.form['activo']
 
-        conn = get_connection()
-        cursor = conn.cursor()
+        if not form["sector_id"]:
+            flash("❌ Debe seleccionar un sector.", "danger")
+            return render_template('nuevo_indicador.html',
+                                   sectores=sectores, form=form)
 
-        # Validar duplicados por nombre y sector
-        cursor.execute("""
-            SELECT id FROM indicadores
-            WHERE LOWER(nombre) = %s AND sector_id = %s
-        """, (nombre, sector_id))
-        existente = cursor.fetchone()
+        conn   = get_connection()
+        cur    = conn.cursor()
 
-        if existente:
+        cur.execute("""
+            SELECT 1 FROM indicadores
+             WHERE LOWER(nombre)=%s AND sector_id=%s
+        """, (form["nombre"].lower(), int(form["sector_id"])))
+        if cur.fetchone():
             flash("❌ Ya existe un indicador con ese nombre en ese sector.", "danger")
         else:
-            cursor.execute("""
+            cur.execute("""
                 INSERT INTO indicadores (nombre, sector_id, activo)
                 VALUES (%s, %s, %s)
-            """, (nombre, sector_id, activo))
+            """, (form["nombre"], int(form["sector_id"]), int(form["activo"])))
             conn.commit()
             flash("✅ Indicador creado correctamente.", "success")
-            cursor.close()
-            conn.close()
-            return redirect(url_for('admin_indicadores'))
+            cur.close(); conn.close()
+            return redirect(url_for('admin_indicadores'))   # ← aquí
 
-        cursor.close()
-        conn.close()
+        cur.close(); conn.close()
 
-    return render_template("nuevo_indicador.html", sectores=sectores)
+    return render_template('nuevo_indicador.html',
+                           sectores=sectores, form=form)
+# ╰───────────────────────────────────────────────────────────╯
 
 
+
+# ╭───────────────────────── EDICIÓN ─────────────────────────╮
 @app.route('/admin/indicadores/editar/<int:id>', methods=['GET', 'POST'])
 @login_required
 def editar_indicador(id):
-    sectores = [
-        (1, "Entrega"),
-        (2, "Almacén"),
-        (3, "Administración"),
-        (4, "Mantenimiento"),
-    ]
+    sectores = obtener_sectores()
 
-    conn = get_connection()
+    conn   = get_connection()
     cursor = conn.cursor(dictionary=True)
 
     if request.method == 'POST':
-        nombre = request.form['nombre'].strip().upper()
-        sector_id = int(request.form['sector_id'])
-        activo = int(request.form['activo'])
+        nombre     = request.form['nombre'].strip().upper()
+        sector_id  = int(request.form['sector_id'])
+        activo     = int(request.form['activo'])
 
-        # Verificar si existe otro indicador con ese nombre en ese sector
+        # Verificar duplicado (mismo nombre y sector, distinto id)
         cursor.execute("""
             SELECT id FROM indicadores
-            WHERE LOWER(nombre) = %s AND sector_id = %s AND id != %s
-        """, (nombre, sector_id, id))
-        duplicado = cursor.fetchone()
-
-        if duplicado:
+             WHERE LOWER(nombre) = %s
+               AND sector_id = %s
+               AND id <> %s
+        """, (nombre.lower(), sector_id, id))
+        if cursor.fetchone():
             flash("❌ Ya existe un indicador con ese nombre en ese sector.", "danger")
         else:
             cursor.execute("""
                 UPDATE indicadores
-                SET nombre = %s, sector_id = %s, activo = %s
-                WHERE id = %s
+                   SET nombre = %s,
+                       sector_id = %s,
+                       activo = %s
+                 WHERE id = %s
             """, (nombre, sector_id, activo, id))
             conn.commit()
             flash("✅ Indicador actualizado correctamente.", "success")
+            cursor.close(); conn.close()
             return redirect(url_for('admin_indicadores'))
 
-    # GET: cargar datos
+    # GET – cargar registro
     cursor.execute("SELECT * FROM indicadores WHERE id = %s", (id,))
     indicador = cursor.fetchone()
+    cursor.close(); conn.close()
 
     if not indicador:
         flash("❌ Indicador no encontrado.", "danger")
         return redirect(url_for('admin_indicadores'))
 
-    cursor.close()
-    conn.close()
-    return render_template("editar_indicador.html", indicador=indicador, sectores=sectores)
+    return render_template("editar_indicador.html",
+                           indicador=indicador,
+                           sectores =sectores)
+# ╰───────────────────────────────────────────────────────────╯
 
+# ─────────────────────────── TOGGLE indicador ──────────────────────────
+#  Activa ⇆ Inactiva un indicador y vuelve a la lista conservando filtros
+@app.route('/admin/indicadores/toggle/<int:id>', methods=['POST'])
+@login_required
+def toggle_indicador(id):
+    conn   = get_connection()
+    cursor = conn.cursor()
+
+    # invertir el campo activo (0→1  /  1→0)
+    cursor.execute("""
+        UPDATE indicadores
+           SET activo = NOT activo
+         WHERE id = %s
+    """, (id,))
+    conn.commit()
+
+    cursor.close(); conn.close()
+
+    # redirige a la página de la que vino (mantiene ?sector_id=… si existía)
+    return redirect(request.referrer or url_for('admin_indicadores'))
 
 @app.route('/registrar_token', methods=['POST'])
 def registrar_token():
@@ -994,39 +1077,39 @@ def api_resumen_dashboard():
         sector_id = int(request.args.get('sector_id', 1))
         fecha_ini = request.args.get('from')
         fecha_fin = request.args.get('to')
-
         if not fecha_ini or not fecha_fin:
-            return jsonify({'tarjetas': []})  # parámetros incompletos
+            return jsonify({'tarjetas': []})
 
-        conn = get_connection()
+        conn   = get_connection()
         cursor = conn.cursor(dictionary=True)
 
+        # Traer indicadores activos de este sector
         cursor.execute("""
             SELECT id, nombre, tipo_grafico, color_grafico, fill_grafico
-            FROM indicadores
-            WHERE sector_id = %s AND activo = 1
+              FROM indicadores
+             WHERE sector_id = %s
+               AND activo = 1
+            ORDER BY nombre
         """, (sector_id,))
         indicadores = cursor.fetchall()
-
-        if not indicadores:
-            return jsonify({'tarjetas': []})  # no hay indicadores activos
 
         tarjetas = []
         for ind in indicadores:
             cursor.execute("""
                 SELECT ROUND(AVG(valor), 2) AS promedio
-                FROM kpis
-                WHERE indicador_id = %s AND sector_id = %s
-                  AND fecha BETWEEN %s AND %s
+                  FROM kpis
+                 WHERE indicador_id = %s
+                   AND sector_id    = %s
+                   AND fecha BETWEEN %s AND %s
             """, (ind['id'], sector_id, fecha_ini, fecha_fin))
-            resultado = cursor.fetchone()
+            prom = cursor.fetchone()['promedio'] or 0
             tarjetas.append({
-                'indicador': ind['nombre'],
-                'valor': float(resultado['promedio'] or 0),
+                'indicador':  ind['nombre'],
+                'valor':       float(prom),
                 'indicador_id': ind['id'],
-                'tipo': ind['tipo_grafico'],
-                'color': ind['color_grafico'],
-                'fill': bool(ind['fill_grafico']),
+                'tipo':        ind['tipo_grafico'],
+                'color':       ind['color_grafico'],
+                'fill':        bool(ind['fill_grafico'])
             })
 
         cursor.close()
@@ -1035,8 +1118,7 @@ def api_resumen_dashboard():
 
     except Exception as e:
         logger.error(f"Error en resumen_dashboard: {e}")
-        return jsonify({'error': 'Error interno en resumen_dashboard'}), 500
-
+        return jsonify({'tarjetas': []}), 500
 
 
 # ────────────────────────────────────────────────────────────────
@@ -1047,49 +1129,48 @@ def api_resumen_dashboard():
 def api_serie_indicador():
     try:
         indicador_id = int(request.args.get('indicador_id'))
-        sector_id    = int(request.args.get('sector_id'))
+        sector_id    = int(request.args.get('sector_id', 1))
         fecha_ini    = request.args.get('from')
         fecha_fin    = request.args.get('to')
-
         if not (fecha_ini and fecha_fin):
             return jsonify({'labels': [], 'data': [], 'indicador': 'Sin datos'})
 
-        conn = get_connection()
+        conn   = get_connection()
         cursor = conn.cursor(dictionary=True)
 
+        # Parámetros del indicador
         cursor.execute("""
             SELECT nombre, tipo_grafico, color_grafico, fill_grafico
-            FROM indicadores
-            WHERE id = %s
+              FROM indicadores
+             WHERE id = %s
         """, (indicador_id,))
-        ind = cursor.fetchone()
+        ind = cursor.fetchone() or {}
 
-        if not ind:
-            return jsonify({'labels': [], 'data': [], 'indicador': 'Desconocido'})
-
+        # Serie histórica filtrada por sector_id
         cursor.execute("""
-            SELECT fecha, ROUND(AVG(valor), 2) AS promedio
+            SELECT fecha, ROUND(AVG(valor),2) AS promedio
               FROM kpis
-             WHERE indicador_id = %s AND sector_id = %s
+             WHERE indicador_id = %s
+               AND sector_id    = %s
                AND fecha BETWEEN %s AND %s
           GROUP BY fecha
           ORDER BY fecha
         """, (indicador_id, sector_id, fecha_ini, fecha_fin))
         rows = cursor.fetchall()
 
-        etiquetas = [r['fecha'].strftime('%d/%m') for r in rows]
-        valores   = [float(r['promedio']) for r in rows]
+        labels = [r['fecha'].strftime('%d/%m') for r in rows]
+        data   = [float(r['promedio'])             for r in rows]
 
         cursor.close()
         conn.close()
 
         return jsonify({
-            'indicador': ind['nombre'],
-            'labels': etiquetas,
-            'data': valores,
-            'tipo': ind['tipo_grafico'],
-            'color': ind['color_grafico'],
-            'fill': bool(ind['fill_grafico'])
+            'indicador': ind.get('nombre', 'Desconocido'),
+            'tipo':       ind.get('tipo_grafico', 'bar'),
+            'color':      ind.get('color_grafico', '#0d6efd'),
+            'fill':       bool(ind.get('fill_grafico', False)),
+            'labels':     labels,
+            'data':       data
         })
 
     except Exception as e:
@@ -1142,52 +1223,56 @@ def historial_kpi_empleado():
 @app.route('/api/kpis_por_dni/<dni>')
 def api_kpis_por_dni(dni):
     try:
+        fecha_ini = request.args.get('from')
+        fecha_fin = request.args.get('to')
+
+        if not fecha_ini or not fecha_fin:
+            return jsonify({'tarjetas': []})  # Faltan parámetros
+
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
 
-        # Obtener el sector del empleado
+        # Detectar sector automáticamente desde el DNI
         cursor.execute("SELECT sector FROM choferes WHERE dni = %s", (dni,))
-        result = cursor.fetchone()
-        if not result:
-            return jsonify({"error": "Empleado no encontrado"}), 404
-        sector_id = result["sector"]
+        resultado = cursor.fetchone()
+        if not resultado:
+            return jsonify({'tarjetas': []})  # No se encontró el empleado
+        sector = resultado['sector']
 
-        # Obtener indicadores activos del sector
+        # Obtener indicadores activos de ese sector
         cursor.execute("""
             SELECT id, nombre, tipo_grafico, color_grafico, fill_grafico
             FROM indicadores
             WHERE sector_id = %s AND activo = 1
-        """, (sector_id,))
+        """, (sector,))
         indicadores = cursor.fetchall()
 
         tarjetas = []
+
         for ind in indicadores:
             cursor.execute("""
-                SELECT valor
+                SELECT ROUND(AVG(valor), 2) AS promedio
                 FROM kpis
-                WHERE dni = %s AND indicador_id = %s
-                ORDER BY fecha DESC
-                LIMIT 1
-            """, (dni, ind["id"]))
-            valor_row = cursor.fetchone()
-            valor = float(valor_row["valor"]) if valor_row else 0
-
+                WHERE dni = %s AND indicador_id = %s AND sector_id = %s
+                  AND fecha BETWEEN %s AND %s
+            """, (dni, ind['id'], sector, fecha_ini, fecha_fin))
+            resultado = cursor.fetchone()
             tarjetas.append({
-                "indicador": ind["nombre"],
-                "valor": valor,
-                "indicador_id": ind["id"],
-                "tipo": ind["tipo_grafico"],
-                "color": ind["color_grafico"],
-                "fill": bool(ind["fill_grafico"])
+                'indicador': ind['nombre'],
+                'valor': float(resultado['promedio'] or 0),
+                'indicador_id': ind['id'],
+                'tipo': ind['tipo_grafico'],
+                'color': ind['color_grafico'],
+                'fill': bool(ind['fill_grafico']),
             })
 
         cursor.close()
         conn.close()
-        return jsonify({"tarjetas": tarjetas})
+        return jsonify({'tarjetas': tarjetas})
 
     except Exception as e:
-        logger.error(f"Error en /api/kpis_por_dni: {e}")
-        return jsonify({"error": "Error interno"}), 500
-
+        logger.error(f"Error en kpis_por_dni: {e}")
+        return jsonify({'error': 'Error interno'}), 500
+    
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)

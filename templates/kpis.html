@@ -1,13 +1,13 @@
 {% extends "base.html" %}
 {% block title %}KPIs de Empleado por DNI{% endblock %}
-{% block header %}📊 KPIs de Empleado por DNI{% endblock %}
+{% block header %}📈 KPIs de Empleado por DNI{% endblock %}
 
 {% block content %}
-<div class="mb-3">
-  <label for="dniInput" class="form-label">Buscar por DNI</label>
+<div class="mb-4">
+  <label class="form-label">Buscar por DNI</label>
   <div class="input-group">
     <input type="text" id="dniInput" class="form-control" placeholder="DNI del empleado">
-    <button class="btn btn-primary" onclick="cargarKPIs()">Buscar</button>
+    <button class="btn btn-primary" onclick="buscarKPIs()">Buscar</button>
   </div>
 </div>
 
@@ -16,89 +16,90 @@
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-  const charts = [];
+const charts = [];
 
-  function sanitizeId(str) {
-    return str.replace(/[^a-zA-Z0-9]/g, "_");
-  }
+function sanitizeId(str) {
+  return str.replace(/[^a-zA-Z0-9]/g, '_');
+}
 
-  async function cargarKPIs() {
-    const dni = document.getElementById("dniInput").value.trim();
-    if (!dni) return alert("Ingrese un DNI válido");
+async function buscarKPIs() {
+  const dni = document.getElementById("dniInput").value.trim();
+  if (!dni) return alert("Por favor ingresa un DNI");
 
-    const tarjetasCont = document.getElementById("contenedorTarjetas");
-    const graficosCont = document.getElementById("contenedorGraficos");
-    tarjetasCont.innerHTML = "";
-    graficosCont.innerHTML = "";
-    charts.forEach(c => c.destroy());
-    charts.length = 0;
+  const tarjetasCont = document.getElementById("contenedorTarjetas");
+  const graficosCont = document.getElementById("contenedorGraficos");
 
-    try {
-      const res = await fetch(`/api/kpis_por_dni/${dni}`);
-      const data = await res.json();
+  tarjetasCont.innerHTML = "";
+  graficosCont.innerHTML = "";
+  charts.forEach(c => c.destroy());
+  charts.length = 0;
 
-      if (!data.tarjetas || data.tarjetas.length === 0) {
-        tarjetasCont.innerHTML = '<div class="alert alert-warning">No hay datos disponibles para este empleado.</div>';
-        return;
-      }
+  try {
+    const res = await fetch(`/api/kpis_por_dni/${dni}`);
+    const datos = await res.json();
 
-      for (const t of data.tarjetas) {
-        const canvasId = `grafico_${sanitizeId(t.indicador)}`;
-
-        tarjetasCont.insertAdjacentHTML("beforeend", `
-          <div class="col-md-3 mb-3">
-            <div class="card text-white bg-primary">
-              <div class="card-body">
-                <h6 class="card-title">${t.indicador}</h6>
-                <h4>${t.valor}</h4>
-              </div>
-            </div>
-          </div>
-        `);
-
-        graficosCont.insertAdjacentHTML("beforeend", `
-          <div class="col-md-6 mb-4">
-            <div class="card">
-              <div class="card-body">
-                <h6>${t.indicador}</h6>
-                <canvas id="${canvasId}"></canvas>
-              </div>
-            </div>
-          </div>
-        `);
-
-        const serieResp = await fetch(`/api/serie_indicador?indicador_id=${t.indicador_id}&dni=${dni}`);
-        const serie = await serieResp.json();
-
-        const ctx = document.getElementById(canvasId)?.getContext("2d");
-        if (!ctx || !serie?.labels?.length) continue;
-
-        const chart = new Chart(ctx, {
-          type: serie.tipo || 'bar',
-          data: {
-            labels: serie.labels,
-            datasets: [{
-              label: t.indicador,
-              data: serie.data,
-              backgroundColor: serie.color || '#0d6efd',
-              borderColor: serie.color || '#0d6efd',
-              fill: serie.fill || false,
-              tension: 0.3
-            }]
-          },
-          options: {
-            responsive: true,
-            scales: {
-              y: { beginAtZero: true }
-            }
-          }
-        });
-
-        charts.push(chart);
-      }
-    } catch (e) {
-      tarjetasCont.innerHTML = '<div class="alert alert-danger">Error al cargar datos.</div>';
+    if (!datos.tarjetas || datos.tarjetas.length === 0) {
+      tarjetasCont.innerHTML = '<div class="alert alert-warning text-center">No se encontraron KPIs.</div>';
+      return;
     }
+
+    for (const t of datos.tarjetas) {
+      const canvasId = `grafico_${sanitizeId(t.indicador)}`;
+
+      tarjetasCont.insertAdjacentHTML("beforeend", `
+        <div class="col-md-3 mb-3">
+          <div class="card text-white bg-primary">
+            <div class="card-body">
+              <h5 class="card-title text-capitalize">${t.indicador}</h5>
+              <h2>${t.valor}</h2>
+            </div>
+          </div>
+        </div>`);
+
+      graficosCont.insertAdjacentHTML("beforeend", `
+        <div class="col-md-6 mb-4">
+          <div class="card">
+            <div class="card-body">
+              <h5 class="card-title">${t.indicador}</h5>
+              <canvas id="${canvasId}"></canvas>
+            </div>
+          </div>
+        </div>`);
+
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      const serieResp = await fetch(`/api/serie_indicador?indicador_id=${t.indicador_id}&sector_id=&from=2024-01-01&to=2050-01-01`);
+      const serie = await serieResp.json();
+
+      const ctx = document.getElementById(canvasId)?.getContext("2d");
+      if (!ctx || !serie?.labels?.length) continue;
+
+      const chart = new Chart(ctx, {
+        type: t.tipo || "bar",
+        data: {
+          labels: serie.labels,
+          datasets: [{
+            label: t.indicador,
+            data: serie.data,
+            borderColor: t.color || "#0d6efd",
+            backgroundColor: t.color || "#0d6efd",
+            fill: t.fill || false,
+            tension: 0.3
+          }]
+        },
+        options: {
+          responsive: true,
+          scales: {
+            y: { beginAtZero: true }
+          }
+        }
+      });
+
+      charts.push(chart);
+    }
+  } catch (err) {
+    tarjetasCont.innerHTML = `<div class="alert alert-danger">Error al cargar: ${err.message}</div>`;
   }
+}
 </script>
 {% endblock %}
