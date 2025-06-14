@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+{% block title %}KPIs de Empleado por DNI y fecha{% endblock %}
+{% block header %}📈 KPIs de Empleado por DNI y fecha{% endblock %}
+
+{% block content %}
+<!-- ====== Filtros ====== -->
+<div class="row g-3 mb-4">
+  <div class="col-md-3">
+    <label class="form-label">Desde</label>
+    <input type="date" id="fromInput" class="form-control">
+  </div>
+  <div class="col-md-3">
+    <label class="form-label">Hasta</label>
+    <input type="date" id="toInput" class="form-control">
+  </div>
+  <div class="col-md-4 d-flex align-items-end">
+    <div class="input-group">
+      <input type="text" id="dniInput" class="form-control" placeholder="DNI del empleado"
+             onkeydown="if(event.key==='Enter') buscarKPIs()">
+      <button class="btn btn-primary" onclick="buscarKPIs()">Buscar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ====== Info del empleado ====== -->
+<div id="infoEmpleado" class="d-flex align-items-center mb-4" style="display:none;">
+  <img id="fotoEmpleado" class="rounded me-3" style="width:80px;height:80px;object-fit:cover;">
+  <div>
+    <h5 id="nombreEmpleado" class="m-0"></h5>
+    <small id="sectorEmpleado" class="text-muted"></small>
+  </div>
+</div>
+
+<!-- Tarjetas KPI y gráficos -->
+<div id="contenedorTarjetas" class="row mb-4 g-3"></div>
+<div id="contenedorGraficos" class="row"></div>
+
+<!-- ====== Scripts ====== -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+  /* Helpers */
+  const charts = [];
+  const slug = s => s.replace(/[^a-zA-Z0-9]/g, '_');
+  const api  = path => `${window.location.origin}${path}`;
+
+  async function buscarKPIs() {
+    const dni  = document.getElementById('dniInput').value.trim();
+    const from = document.getElementById('fromInput').value;  // '' si vacío
+    const to   = document.getElementById('toInput').value;    // '' si vacío
+
+    if (!dni) { alert('Por favor ingresa un DNI'); return; }
+    if (from && to && from > to) { alert('"Desde" no puede ser mayor que "Hasta"'); return; }
+
+    /* Referencias DOM */
+    const infoDiv = document.getElementById('infoEmpleado');
+    const fotoImg = document.getElementById('fotoEmpleado');
+    const nomLbl  = document.getElementById('nombreEmpleado');
+    const secLbl  = document.getElementById('sectorEmpleado');
+    const tCont   = document.getElementById('contenedorTarjetas');
+    const gCont   = document.getElementById('contenedorGraficos');
+
+    /* Limpiar UI previa */
+    infoDiv.style.display = 'none';
+    tCont.innerHTML = ''; gCont.innerHTML = '';
+    charts.forEach(c => c.destroy()); charts.length = 0;
+
+    /* Query-string */
+    let qs = '';
+    if (from) qs += (qs ? '&' : '?') + 'from=' + from;
+    if (to)   qs += (qs ? '&' : '?') + 'to='   + to;
+
+    /* ===== 1) Resumen KPIs ===== */
+    const res = await fetch(api(`/api/empleados/${dni}/kpis/resumen`) + qs);
+    if (!res.ok) { alert('No se encontró el DNI o ocurrió un error'); return; }
+    const { empleado = {}, kpis = [] } = await res.json();
+
+    /* Mostrar datos del empleado */
+    if (Object.keys(empleado).length) {
+      nomLbl.textContent = empleado.nombre || '(sin nombre)';
+      secLbl.textContent = empleado.sector || '';
+      if (empleado.foto) {
+        fotoImg.src = empleado.foto; fotoImg.style.display = '';
+      } else {
+        fotoImg.style.display = 'none';
+      }
+      infoDiv.style.display = 'flex';
+    }
+
+    /* Si no hay KPIs */
+    if (!kpis.length) {
+      tCont.innerHTML =
+        '<div class="alert alert-warning w-100 text-center">No se encontraron KPIs.</div>';
+      return;
+    }
+
+    /* Render tarjetas y gráficos */
+    for (const k of kpis) {
+      const cid = 'graf_' + slug(k.indicador);
+
+      /* Tarjeta KPI */
+      tCont.insertAdjacentHTML('beforeend', `
+        <div class="col-sm-6 col-md-4 col-lg-3">
+          <div class="card text-white" style="background-color:${k.color || '#0d6efd'}">
+            <div class="card-body p-2">
+              <small class="text-uppercase">${k.indicador}</small>
+              <h3 class="m-0">${k.valor}</h3>
+            </div>
+          </div>
+        </div>`);
+
+      /* Contenedor gráfico */
+      gCont.insertAdjacentHTML('beforeend', `
+        <div class="col-md-6 mb-4">
+          <div class="card"><div class="card-body">
+            <h6 class="card-title">${k.indicador}</h6>
+            <canvas id="${cid}"></canvas>
+          </div></div>
+        </div>`);
+
+      /* ===== 2) Serie histórica ===== */
+      const serieRes = await fetch(
+        api(`/api/empleados/${dni}/indicadores/${k.indicador_id}/serie`) + qs
+      );
+      if (!serieRes.ok) continue;
+      const serie = await serieRes.json();
+      if (!serie?.labels?.length) continue;
+
+      const ctx = document.getElementById(cid).getContext('2d');
+      charts.push(new Chart(ctx, {
+        type: serie.tipo || k.tipo || 'bar',
+        data: {
+          labels: serie.labels,
+          datasets: [{
+            label: k.indicador,
+            data:  serie.data,
+            borderColor: serie.color || k.color || '#0d6efd',
+            backgroundColor: (k.tipo === 'bar')
+                ? (serie.color || k.color)
+                : (serie.color || k.color + '55'),
+            fill: serie.fill ?? k.fill,
+            tension: 0.3
+          }]
+        },
+        options: { responsive:true, scales:{ y:{ beginAtZero:true } } }
+      }));
+    }
+  }
+</script>
+{% endblock %}

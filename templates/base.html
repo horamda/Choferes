@@ -81,8 +81,12 @@
 
     <a href="{{ url_for('vista_kpis') }}"
        class="{% if request.path == url_for('vista_kpis') %}active{% endif %}">
-       <i class="bi bi-bar-chart-line"></i> KPIs</a>
+       <i class="bi bi-bar-chart-line"></i> KPIs por empleado acumulados</a>
 
+    <a href="{{ url_for('vista_kpis1') }}"
+       class="{% if request.path == url_for('vista_kpis1') %}active{% endif %}">
+       <i class="bi bi-bar-chart-line"></i> KPIs por empleado y fechas</a>   
+     
     <a href="{{ url_for('subida_resultados') }}"
        class="{% if request.path == url_for('subida_resultados') %}active{% endif %}">
        <i class="bi bi-upload"></i> Subida Resultados</a>

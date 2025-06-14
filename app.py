@@ -14,7 +14,8 @@ import re
 import logging
 from unicodedata import normalize
 import base64
-
+import jwt
+from mysql.connector import Error  
 
 
 # Configurar logging
@@ -349,24 +350,52 @@ def imagen_chofer(dni):
     else:
         return "", 204
 
-@app.route('/api/login', methods=['POST'])
+
+JWT_SECRET = os.getenv("JWT_SECRET", "cambia_esto_en_produccion")
+JWT_EXPIRE_HRS = int(os.getenv("JWT_EXPIRE_HRS", 8))  # 8 h por defecto
+
+@app.route("/api/login", methods=["POST"])
 def login_chofer():
-    data = request.get_json()
-    dni = data.get('dni')
+    data = request.get_json(silent=True) or {}
+    dni = data.get("dni")
+
     if not dni:
-        return jsonify({'success': False, 'message': 'DNI requerido'}), 400
+        return jsonify(success=False, message="DNI requerido"), 400
 
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT nombre, sector FROM choferes WHERE dni = %s", (dni,))
-    result = cursor.fetchone()
-    cursor.close()
-    conn.close()
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT nombre, sector FROM choferes WHERE dni = %s",
+            (dni,),
+        )
+        row = cursor.fetchone()
+    except Error as e:
+        logger.error(f"Error de base de datos: {e}")
+        return jsonify(success=False, message="Error de base de datos"), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 
-    if result:
-        return jsonify({'success': True, 'nombre': result[0], 'sector': result[1]})
-    else:
-        return jsonify({'success': False, 'message': 'Chofer no encontrado'}), 404
+    if not row:
+        return jsonify(success=False, message="Chofer no encontrado"), 404
+
+    nombre, sector = row
+
+    # Generar JWT (expira en JWT_EXPIRE_HRS)
+    exp = datetime.utcnow() + timedelta(hours=JWT_EXPIRE_HRS)
+    token = jwt.encode({"dni": dni, "exp": exp}, JWT_SECRET, algorithm="HS256")
+
+    return jsonify(
+        success=True,
+        nombre=nombre,
+        sector=sector,
+        token=token,
+        expires_in=JWT_EXPIRE_HRS * 3600,
+    )
+
 
 @app.route('/kpis/<dni>')
 def kpis(dni):
@@ -572,6 +601,11 @@ def kpis_hoy_o_ultimo(dni):
 @login_required
 def vista_kpis():
     return render_template('kpis.html')
+
+@app.route('/admin/kpis1')
+@login_required
+def vista_kpis1():
+    return render_template('kpisFecha.html')
 
 @app.route('/testdb')
 def testdb():
@@ -1257,7 +1291,7 @@ def kpis_por_dni(dni):
                i.color_grafico color,
                i.tipo_grafico  tipo,
                i.fill_grafico  fill,
-               ROUND(SUM(k.valor),2) valor
+               ROUND(AVG(k.valor),2) valor
           FROM kpis k
           JOIN indicadores i ON i.id = k.indicador_id
          WHERE k.dni = %s
@@ -1267,6 +1301,131 @@ def kpis_por_dni(dni):
 
     cur.close(); conn.close()
     return jsonify({'chofer': chofer, 'tarjetas': tarjetas})
+
+@app.route('/api/empleados/<dni>/kpis/resumen')
+@login_required
+def kpis_resumen(dni):
+    # ── 1) Parámetros de fecha ───────────────────────────────
+    fecha_inicio = request.args.get('from')  or request.args.get('fecha_inicio')
+    fecha_fin    = request.args.get('to')    or request.args.get('fecha_fin')
+
+    cond_fecha   = ""
+    params_fecha = []
+    try:
+        if fecha_inicio:
+            dt_ini = datetime.strptime(fecha_inicio, '%Y-%m-%d').date()
+            cond_fecha += " AND DATE(k.fecha) >= %s"
+            params_fecha.append(dt_ini)
+        if fecha_fin:
+            dt_fin = datetime.strptime(fecha_fin, '%Y-%m-%d').date()
+            cond_fecha += " AND DATE(k.fecha) <= %s"
+            params_fecha.append(dt_fin)
+    except ValueError:
+        return jsonify({"error": "Formato de fecha inválido. Use YYYY-MM-DD"}), 400
+
+    conn   = get_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    # ── 2) Datos del empleado ────────────────────────────────
+    cursor.execute("""
+        SELECT nombre, sector, imagen
+          FROM choferes
+         WHERE dni = %s
+         LIMIT 1
+    """, (dni,))
+    chofer = cursor.fetchone() or {}
+
+    if chofer.get('imagen'):
+        chofer['foto'] = (
+            "data:image/jpeg;base64," +
+            base64.b64encode(chofer['imagen']).decode()
+        )
+    else:
+        chofer['foto'] = None
+    chofer.pop('imagen', None)
+
+    # ── 3) KPIs promediados (filtrados) ──────────────────────
+    sql = f"""
+        SELECT i.id            AS indicador_id,
+               i.nombre        AS indicador,
+               i.color_grafico AS color,
+               i.tipo_grafico  AS tipo,
+               i.fill_grafico  AS fill,
+               ROUND(AVG(k.valor),2) AS valor
+          FROM kpis k
+          JOIN indicadores i ON i.id = k.indicador_id
+         WHERE k.dni = %s
+           {cond_fecha}
+      GROUP BY i.id, i.nombre, i.color_grafico, i.tipo_grafico, i.fill_grafico
+      ORDER BY i.nombre
+    """
+
+    # DEBUG opcional (sin mogrify, imprime la consulta y los params)
+    if app.debug:
+        app.logger.debug("SQL: %s", sql)
+        app.logger.debug("PARAMS: %s", (dni, *params_fecha))
+
+    cursor.execute(sql, (dni, *params_fecha))
+    tarjetas = [dict(r) for r in cursor.fetchall()]
+
+    cursor.close()
+    conn.close()
+    return jsonify({"empleado": chofer, "kpis": tarjetas})
+
+@app.route('/api/empleados/<dni>/indicadores/<int:indicador_id>/serie')
+@login_required
+def serie_indicador(dni, indicador_id):
+    # 1) Parámetros de rango ---------------------------------------
+    fecha_inicio = request.args.get('from')
+    fecha_fin    = request.args.get('to')
+    if not (fecha_inicio and fecha_fin):
+        return jsonify({"error": "Debe enviar from y to"}), 400
+    try:
+        dt_ini = datetime.strptime(fecha_inicio, '%Y-%m-%d').date()
+        dt_fin = datetime.strptime(fecha_fin,    '%Y-%m-%d').date()
+    except ValueError:
+        return jsonify({"error": "Formato de fecha inválido"}), 400
+
+    conn   = get_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    # 2) Metadatos del indicador -----------------------------------
+    cursor.execute("""
+        SELECT nombre, tipo_grafico, color_grafico, fill_grafico
+          FROM indicadores
+         WHERE id = %s
+    """, (indicador_id,))
+    meta = cursor.fetchone()
+    if not meta:
+        cursor.close(); conn.close()
+        return jsonify({"error": "Indicador no encontrado"}), 404
+
+    # 3) Serie histórica (agrupada por día) ------------------------
+    cursor.execute("""
+        SELECT DATE(fecha)  AS fecha,
+               ROUND(AVG(valor), 2) AS avg_val
+          FROM kpis
+         WHERE dni          = %s
+           AND indicador_id = %s
+           AND DATE(fecha) BETWEEN %s AND %s
+      GROUP BY DATE(fecha)
+      ORDER BY DATE(fecha)
+    """, (dni, indicador_id, dt_ini, dt_fin))
+    rows = cursor.fetchall()
+
+    cursor.close(); conn.close()
+
+    labels = [r['fecha'].strftime('%Y-%m-%d') for r in rows]
+    data   = [float(r['avg_val']) for r in rows]
+
+    return jsonify({
+        "labels": labels,
+        "data":   data,
+        "color":  meta['color_grafico'] or "#1565C0",
+        "fill":   bool(meta['fill_grafico']),
+        "tipo":   meta['tipo_grafico'] or "line"
+    })
+
 
     
 if __name__ == '__main__':
