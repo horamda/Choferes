@@ -32,6 +32,25 @@ CORS(app)
 app.secret_key = 'clave-super-secreta'
 app.permanent_session_lifetime = timedelta(minutes=30)
 
+def jwt_required_api(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        auth_header = request.headers.get("Authorization", "")
+        if not auth_header.startswith("Bearer "):
+            return jsonify({"success": False, "message": "Token faltante"}), 401
+        token = auth_header.split(" ")[1]
+        try:
+            jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
+        except jwt.ExpiredSignatureError:
+            return jsonify({"success": False, "message": "Token expirado"}), 401
+        except jwt.InvalidTokenError:
+            return jsonify({"success": False, "message": "Token inválido"}), 401
+        return f(*args, **kwargs)
+    return decorated
+
+
+
+
 def get_connection():
     return mysql.connector.connect(**MYSQL_CONFIG)
 
@@ -1216,7 +1235,7 @@ def api_serie_indicador():
     
     
 @app.route('/api/serie_indicador_dni')
-@login_required
+@jwt_required_api
 def serie_indicador_dni():
     dni          = request.args.get('dni')
     indicador_id = request.args.get('indicador_id', type=int)
@@ -1260,7 +1279,7 @@ def serie_indicador_dni():
     
 
 @app.route('/api/kpis_por_dni/<dni>')
-@login_required
+@jwt_required_api
 def kpis_por_dni(dni):
     conn   = get_connection()
     cur    = conn.cursor(dictionary=True)
@@ -1303,7 +1322,7 @@ def kpis_por_dni(dni):
     return jsonify({'chofer': chofer, 'tarjetas': tarjetas})
 
 @app.route('/api/empleados/<dni>/kpis/resumen')
-@login_required
+@jwt_required_api
 def kpis_resumen(dni):
     # ── 1) Parámetros de fecha ───────────────────────────────
     fecha_inicio = request.args.get('from')  or request.args.get('fecha_inicio')
@@ -1373,7 +1392,7 @@ def kpis_resumen(dni):
     return jsonify({"empleado": chofer, "kpis": tarjetas})
 
 @app.route('/api/empleados/<dni>/indicadores/<int:indicador_id>/serie')
-@login_required
+@jwt_required_api
 def serie_indicador(dni, indicador_id):
     # 1) Parámetros de rango ---------------------------------------
     fecha_inicio = request.args.get('from')
@@ -1425,6 +1444,35 @@ def serie_indicador(dni, indicador_id):
         "fill":   bool(meta['fill_grafico']),
         "tipo":   meta['tipo_grafico'] or "line"
     })
+
+@app.route('/kpis/promedio_mes/<dni>')
+@jwt_required_api
+def promedio_mes_kpis(dni):
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT i.nombre AS indicador, AVG(k.valor) as promedio
+        FROM kpis k
+        JOIN indicadores i ON k.indicador_id = i.id
+        WHERE k.dni = %s
+          AND YEAR(k.fecha) = YEAR(CURDATE())
+          AND MONTH(k.fecha) = MONTH(CURDATE())
+        GROUP BY k.indicador_id
+    """, (dni,))
+    rows = cursor.fetchall()
+    cursor.close()
+    conn.close()
+
+    if not rows:
+        return jsonify({'message': 'No hay datos para este mes'}), 404
+
+    # Armar respuesta
+    return jsonify([
+        {'indicador': r[0], 'promedio': float(r[1])}
+        for r in rows
+    ])
+
 
 
     
