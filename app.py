@@ -1293,29 +1293,29 @@ def serie_indicador_dni():
     
 
 @app.route('/api/kpis_por_dni/<dni>')
-#@jwt_required_api
 def kpis_por_dni(dni):
-    conn   = get_connection()
-    cur    = conn.cursor(dictionary=True)
+    conn = get_connection()
+    cur = conn.cursor(dictionary=True)
 
     # ── Datos del chofer ───────────────────────────────
     cur.execute("""
-        SELECT nombre, sector, imagen
-          FROM choferes
-         WHERE dni = %s
-        LIMIT 1
+        SELECT c.nombre, c.sector, c.imagen, MAX(k.fecha) AS ultima_fecha
+          FROM choferes c
+     LEFT JOIN kpis k ON k.dni = c.dni
+         WHERE c.dni = %s
+         GROUP BY c.nombre, c.sector, c.imagen
+         LIMIT 1
     """, (dni,))
-    chofer = cur.fetchone() or {}
+    row = cur.fetchone()
+    chofer = {}
 
-    # Convertir imagen a base64 y quitar el campo bytes
-    if chofer.get('imagen'):
+    if row:
+        chofer['nombre'] = row['nombre']
+        chofer['sector'] = row['sector']
         chofer['foto'] = (
-            "data:image/jpeg;base64," +
-            base64.b64encode(chofer['imagen']).decode()
-        )
-    else:
-        chofer['foto'] = None
-    chofer.pop('imagen', None)        # ← elimina clave que contiene bytes
+            "data:image/jpeg;base64," + base64.b64encode(row['imagen']).decode()
+        ) if row['imagen'] else None
+        chofer['fecha'] = row['ultima_fecha'].strftime('%Y-%m-%d') if row['ultima_fecha'] else 'Sin registros'
 
     # ── KPIs agregados ────────────────────────────────
     cur.execute("""
@@ -1332,8 +1332,11 @@ def kpis_por_dni(dni):
     """, (dni,))
     tarjetas = [dict(r) for r in cur.fetchall()]
 
-    cur.close(); conn.close()
+    cur.close()
+    conn.close()
+
     return jsonify({'chofer': chofer, 'tarjetas': tarjetas})
+
 
 @app.route('/api/empleados/<dni>/kpis/resumen')
 #@jwt_required_api
