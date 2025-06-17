@@ -6,4 +6,4 @@ gunicorn
 google-auth
 requests
 PyJWT==2.9.0
-PillowPillow>=10.0.0
+Pillow>=10.0.0
