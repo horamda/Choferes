@@ -424,6 +424,7 @@ def login_chofer():
         success=True,
         nombre=nombre,
         sector=sector,
+        dni=dni,
         token=token,
         expires_in=JWT_EXPIRE_HRS * 3600,
     )
