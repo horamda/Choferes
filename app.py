@@ -485,20 +485,37 @@ def historial_kpis(dni):
 
 @app.route('/avisos/<dni>')
 def avisos(dni):
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("""
-        SELECT id, fecha, mensaje
-        FROM avisos
-        WHERE dni = %s
-        ORDER BY fecha DESC
-        LIMIT 5
-    """, (dni,))
-    rows = cursor.fetchall()
-    cursor.close()
-    conn.close()
-    avisos = [{'id': r[0], 'fecha': r[1].strftime('%Y-%m-%d %H:%M'), 'mensaje': r[2]} for r in rows]
-    return jsonify(avisos)
+    if not dni.isdigit():
+        return jsonify({'error': 'DNI inválido'}), 400
+
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT id, fecha, mensaje
+            FROM avisos
+            WHERE dni = %s
+            ORDER BY fecha DESC
+            LIMIT 5
+        """, (dni,))
+        rows = cursor.fetchall()
+        avisos = [
+            {
+                'id': r[0],
+                'fecha': r[1].strftime('%Y-%m-%d %H:%M'),
+                'mensaje': r[2]
+            }
+            for r in rows
+        ]
+        return jsonify(avisos)
+
+    except Exception as e:
+        print(f"Error en /avisos/{dni}: {e}")
+        return jsonify({'error': 'Error al consultar los avisos'}), 500
+
+    finally:
+        cursor.close()
+        conn.close()
 
 @app.route('/admin/subida', methods=['GET', 'POST'])
 @login_required
@@ -1493,5 +1510,3 @@ def promedio_mes_kpis(dni):
 
 
     
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
