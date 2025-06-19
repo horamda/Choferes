@@ -1507,6 +1507,43 @@ def promedio_mes_kpis(dni):
         for r in rows
     ])
 
+@app.route('/api/solicitar_vale', methods=['POST'])
+def solicitar_vale():
+    data = request.get_json()
+    dni = data.get('dni')
 
+    if not dni:
+        return jsonify({"success": False, "message": "DNI requerido"}), 400
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    hoy = date.today()
+    mes_actual = hoy.month
+    anio_actual = hoy.year
+
+    try:
+        cursor.execute("""
+            SELECT 1 FROM vales_solicitados
+            WHERE dni = %s AND MONTH(fecha_solicitud) = %s AND YEAR(fecha_solicitud) = %s
+        """, (dni, mes_actual, anio_actual))
+
+        if cursor.fetchone():
+            return jsonify({"success": False, "message": "Ya solicitaste un vale este mes"}), 400
+
+        cursor.execute("""
+            INSERT INTO vales_solicitados (dni, fecha_solicitud)
+            VALUES (%s, %s)
+        """, (dni, hoy))
+        conn.commit()
+        return jsonify({"success": True, "message": "Vale solicitado correctamente"}), 200
+
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"success": False, "message": str(e)}), 500
+
+    finally:
+        cursor.close()
+        conn.close()
 
     
