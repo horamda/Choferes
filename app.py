@@ -1509,11 +1509,12 @@ def promedio_mes_kpis(dni):
 
 @app.route('/api/solicitar_vale', methods=['POST'])
 def solicitar_vale():
-    data = request.get_json()
+   try:
+    data = request.get_json(force=True)
     dni = data.get('dni')
-
-    if not dni:
-        return jsonify({"success": False, "message": "DNI requerido"}), 400
+   except Exception as e:
+    print(f"❌ Error parseando JSON: {e}")
+    return jsonify({"success": False, "message": "Error en datos enviados"}), 4000
 
     conn = get_connection()
     cursor = conn.cursor()
