@@ -1509,12 +1509,14 @@ def promedio_mes_kpis(dni):
 
 @app.route('/api/solicitar_vale', methods=['POST'])
 def solicitar_vale():
-   try:
-    data = request.get_json(force=True)
-    dni = data.get('dni')
-   except Exception as e:
-    print(f"❌ Error parseando JSON: {e}")
-    return jsonify({"success": False, "message": "Error en datos enviados"}), 4000
+    try:
+        data = request.get_json(force=True)
+        dni = data.get('dni')
+        if not dni:
+            raise ValueError("DNI vacío o nulo")
+    except Exception as e:
+        print(f"❌ Error parseando JSON o DNI inválido: {e}")
+        return jsonify({"success": False, "message": "Error en datos enviados"}), 400
 
     conn = get_connection()
     cursor = conn.cursor()
@@ -1541,10 +1543,12 @@ def solicitar_vale():
 
     except Exception as e:
         conn.rollback()
+        print(f"❌ Error en base de datos: {e}")
         return jsonify({"success": False, "message": str(e)}), 500
 
     finally:
         cursor.close()
         conn.close()
+
 
     
