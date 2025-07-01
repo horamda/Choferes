@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+
+{% block title %}Vales Solicitados{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="bg-primary text-white p-4 rounded mb-4 shadow-sm text-center">
+        <h2 class="m-0">📋 Reporte de Vales Solicitados</h2>
+        <p class="lead m-0">Agrupado por mes y empleado</p>
+    </div>
+    <form method="get" class="row g-2 mb-4">
+    <div class="col-md-3">
+        <label for="mes" class="form-label">Mes</label>
+        <select name="mes" id="mes" class="form-select">
+            <option value="">Todos</option>
+            {% for m in range(1, 13) %}
+                <option value="{{ m }}" {% if mes_filtro == m|string %}selected{% endif %}>{{ m }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="col-md-3">
+        <label for="anio" class="form-label">Año</label>
+        <select name="anio" id="anio" class="form-select">
+    <option value="">Todos</option>
+    {% for a in [2025, 2026, 2027] %}
+        <option value="{{ a }}" {% if anio_filtro == a|string %}selected{% endif %}>{{ a }}</option>
+    {% endfor %}
+</select>
+    </div>
+    <div class="col-md-3 align-self-end">
+        <button type="submit" class="btn btn-primary">
+            <i class="bi bi-funnel"></i> Filtrar
+        </button>
+        <a href="{{ url_for('ver_vales') }}" class="btn btn-outline-secondary">
+            Limpiar
+        </a>
+    </div>
+        <div class="mb-3 text-end">
+    <button class="btn btn-secondary" onclick="window.print()">
+        <i class="bi bi-printer"></i> Imprimir reporte
+    </button>
+</div>
+</form>
+
+    <div class="table-responsive">
+        <table class="table table-striped table-bordered align-middle text-center">
+            <thead class="table-primary">
+                <tr>
+                    <th>DNI</th>
+                    <th>Nombre</th>
+                    <th>Sector</th>
+                    <th>Mes</th>
+                    <th>Año</th>
+                    <th>Cantidad de Vales</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for vale in vales %}
+                <tr>
+                    <td>{{ vale.dni }}</td>
+                    <td>{{ vale.nombre }}</td>
+                    <td>{{ vale.sector }}</td>
+                    <td>{{ vale.mes }}</td>
+                    <td>{{ vale.anio }}</td>
+                    <td><strong>{{ vale.cantidad_vales }}</strong></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<style>
+@media print {
+    .sidebar, .topbar, .btn, form, nav, .text-end {
+        display: none !important;
+    }
+    body {
+        margin: 0;
+        padding: 0;
+        background: white;
+    }
+    table {
+        font-size: 10px;
+    }
+    .table th, .table td {
+        padding: 6px;
+    }
+}
+</style>
+{% endblock %}

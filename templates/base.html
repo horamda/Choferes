@@ -1,130 +1,173 @@
 <!DOCTYPE html>
 <html lang="es">
-<head>
-    <meta charset="UTF-8">
+  <head>
+    <meta charset="UTF-8" />
     <title>{% block title %}Panel Administrativo{% endblock %}</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
 
     <!-- Bootstrap 5 + Bootstrap Icons -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css"
+      rel="stylesheet"
+    />
 
     <style>
-        body {
-            display: flex;
-            min-height: 100vh;
-            margin: 0;
-            font-family: system-ui, sans-serif;
-        }
-        .sidebar {
-            width: 250px;
-            background-color: #343a40;
-            color: white;
-            flex-shrink: 0;
-        }
-        .sidebar h4 {
-            margin: 0;
-            padding: 20px;
-            background-color: #212529;
-            font-size: 1.25rem;
-            border-bottom: 1px solid #495057;
-        }
-        .sidebar a {
-            color: white;
-            text-decoration: none;
-            display: block;
-            padding: 12px 20px;
-            transition: background-color 0.2s;
-        }
-        .sidebar a:hover, .sidebar a.active {
-            background-color: #495057;
-        }
-        .content {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-        }
-        .topbar {
-            background-color: #f8f9fa;
-            padding: 10px 20px;
-            border-bottom: 1px solid #dee2e6;
-        }
-        .topbar h5 {
-            margin: 0;
-        }
-        .main {
-            padding: 20px;
-            flex-grow: 1;
-            overflow-y: auto;
-        }
+      body {
+        display: flex;
+        min-height: 100vh;
+        margin: 0;
+        font-family: system-ui, sans-serif;
+      }
+      .sidebar {
+        width: 250px;
+        background-color: #343a40;
+        color: white;
+        flex-shrink: 0;
+      }
+      .sidebar h4 {
+        margin: 0;
+        padding: 20px;
+        background-color: #212529;
+        font-size: 1.25rem;
+        border-bottom: 1px solid #495057;
+      }
+      .sidebar a {
+        color: white;
+        text-decoration: none;
+        display: block;
+        padding: 12px 20px;
+        transition: background-color 0.2s;
+      }
+      .sidebar a:hover,
+      .sidebar a.active {
+        background-color: #495057;
+      }
+      .content {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+      }
+      .topbar {
+        background-color: #f8f9fa;
+        padding: 10px 20px;
+        border-bottom: 1px solid #dee2e6;
+      }
+      .topbar h5 {
+        margin: 0;
+      }
+      .main {
+        padding: 20px;
+        flex-grow: 1;
+        overflow-y: auto;
+      }
     </style>
-</head>
-<body>
+  </head>
+  <body>
     <!-- Sidebar -->
-   <div class="sidebar">
-    <h4>🚛 Admin</h4>
-    <a href="{{ url_for('dashboard') }}"
-       class="{% if request.path == url_for('dashboard') %}active{% endif %}">
-       <i class="bi bi-speedometer2"></i> Dashboard</a>
+    <div class="sidebar">
+      <h4>Admin</h4>
+      <a
+        href="{{ url_for('dashboard') }}"
+        class="{% if request.path == url_for('dashboard') %}active{% endif %}"
+      >
+        <i class="bi bi-speedometer2"></i> Dashboard</a
+      >
 
-    <a href="{{ url_for('panel') }}"
-       class="{% if request.path == url_for('panel') %}active{% endif %}">
-       <i class="bi bi-megaphone"></i> Cargar Avisos</a>
+      <a
+        href="{{ url_for('panel') }}"
+        class="{% if request.path == url_for('panel') %}active{% endif %}"
+      >
+        <i class="bi bi-megaphone"></i> Cargar Avisos</a
+      >
 
-    <a href="{{ url_for('historial_push') }}"
-       class="{% if request.path == url_for('historial_push') %}active{% endif %}">
-       <i class="bi bi-bell-fill"></i> Historial Push</a>
+      <a
+        href="{{ url_for('historial_push') }}"
+        class="{% if request.path == url_for('historial_push') %}active{% endif %}"
+      >
+        <i class="bi bi-bell-fill"></i> Historial Push</a
+      >
 
-    <a href="{{ url_for('listar_choferes') }}"
-       class="{% if request.path == url_for('listar_choferes') %}active{% endif %}">
-       <i class="bi bi-people"></i> Empleados</a>
+      <a
+        href="{{ url_for('listar_choferes') }}"
+        class="{% if request.path == url_for('listar_choferes') %}active{% endif %}"
+      >
+        <i class="bi bi-people"></i> Empleados</a
+      >
 
-    <a href="{{ url_for('vista_kpis') }}"
-       class="{% if request.path == url_for('vista_kpis') %}active{% endif %}">
-       <i class="bi bi-bar-chart-line"></i> KPIs por empleado acumulados</a>
+      <a
+        href="{{ url_for('vista_kpis') }}"
+        class="{% if request.path == url_for('vista_kpis') %}active{% endif %}"
+      >
+        <i class="bi bi-bar-chart-line"></i> KPIs por empleado acumulados</a
+      >
 
-    <a href="{{ url_for('vista_kpis1') }}"
-       class="{% if request.path == url_for('vista_kpis1') %}active{% endif %}">
-       <i class="bi bi-bar-chart-line"></i> KPIs por empleado y fechas</a>   
-     
-    <a href="{{ url_for('subida_resultados') }}"
-       class="{% if request.path == url_for('subida_resultados') %}active{% endif %}">
-       <i class="bi bi-upload"></i> Subida Resultados</a>
+      <a
+        href="{{ url_for('vista_kpis1') }}"
+        class="{% if request.path == url_for('vista_kpis1') %}active{% endif %}"
+      >
+        <i class="bi bi-bar-chart-line"></i> KPIs por empleado y fechas</a
+      >
 
-    <a href="{{ url_for('admin_indicadores') }}"
-       class="{% if request.path.startswith('/admin/indicadores') %}active{% endif %}">
-       <i class="bi bi-sliders"></i> Indicadores</a>
+      <a
+        href="{{ url_for('subida_resultados') }}"
+        class="{% if request.path == url_for('subida_resultados') %}active{% endif %}"
+      >
+        <i class="bi bi-upload"></i> Subida Resultados</a
+      >
 
-    <a href="{{ url_for('logout') }}"
-       class="{% if request.path == url_for('logout') %}active{% endif %}">
-       <i class="bi bi-box-arrow-right"></i> Cerrar sesión</a>
-</div>
+      <a
+        href="{{ url_for('admin_indicadores') }}"
+        class="{% if request.path.startswith('/admin/indicadores') %}active{% endif %}"
+      >
+        <i class="bi bi-sliders"></i> Indicadores</a
+      >
+
+      <a
+        href="{{ url_for('ver_vales') }}"
+        class="{% if request.path == url_for('ver_vales') %}active{% endif %}"
+      >
+        <i class="bi bi-cash-stack"></i> Vales solicitados</a
+      >
+
+      <a
+        href="{{ url_for('logout') }}"
+        class="{% if request.path == url_for('logout') %}active{% endif %}"
+      >
+        <i class="bi bi-box-arrow-right"></i> Cerrar sesión</a
+      >
+    </div>
 
     <!-- Contenido principal -->
     <div class="content">
-        <div class="topbar d-flex justify-content-between align-items-center">
-            <h5>{% block header %}Panel{% endblock %}</h5>
-            <span class="text-muted">Bienvenido, {{ session['admin'] }}</span>
-        </div>
+      <div class="topbar d-flex justify-content-between align-items-center">
+        <h5>{% block header %}Panel{% endblock %}</h5>
+        <span class="text-muted">Bienvenido, {{ session['admin'] }}</span>
+      </div>
 
-        <div class="main">
-            {% with messages = get_flashed_messages(with_categories=true) %}
-                {% if messages %}
-                    {% for category, message in messages %}
-                        <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
-                            {{ message }}
-                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
-                        </div>
-                    {% endfor %}
-                {% endif %}
-            {% endwith %}
-
-            {% block content %}{% endblock %}
+      <div class="main">
+        {% with messages = get_flashed_messages(with_categories=true) %} {% if
+        messages %} {% for category, message in messages %}
+        <div
+          class="alert alert-{{ category }} alert-dismissible fade show"
+          role="alert"
+        >
+          {{ message }}
+          <button
+            type="button"
+            class="btn-close"
+            data-bs-dismiss="alert"
+            aria-label="Cerrar"
+          ></button>
         </div>
+        {% endfor %} {% endif %} {% endwith %} {% block content %}{% endblock %}
+      </div>
     </div>
 
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-</body>
+  </body>
 </html>
-

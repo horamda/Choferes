@@ -1550,5 +1550,127 @@ def solicitar_vale():
         cursor.close()
         conn.close()
 
+@app.route('/dashboard/vales', methods=['GET'])
+@login_required
+def ver_vales():
+    if 'admin' not in session:
+        return redirect(url_for('login'))
 
-    
+    mes = request.args.get('mes')
+    anio = request.args.get('anio')
+
+    conn = get_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    try:
+        condiciones = []
+        valores = []
+
+        if mes:
+            condiciones.append("v.mes = %s")
+            valores.append(mes)
+
+        if anio:
+            condiciones.append("v.anio = %s")
+            valores.append(anio)
+
+        where_clause = "WHERE " + " AND ".join(condiciones) if condiciones else ""
+
+        cursor.execute(f"""
+            SELECT 
+                v.dni,
+                c.nombre,
+                c.sector,
+                v.mes,
+                v.anio,
+                COUNT(*) AS cantidad_vales
+            FROM vales_solicitados v
+            JOIN choferes c ON v.dni = c.dni
+            {where_clause}
+            GROUP BY v.dni, v.anio, v.mes
+            ORDER BY v.anio DESC, v.mes DESC, c.nombre;
+        """, valores)
+        vales = cursor.fetchall()
+
+    finally:
+        cursor.close()
+        conn.close()
+
+    return render_template('vales_dashboard.html', vales=vales, mes_filtro=mes, anio_filtro=anio)
+
+
+@app.route('/api/empleados/<string:dni>/indicadores/series')
+def indicadores_series(dni):
+    # 1) Obtener parámetros de fecha -------------------------------
+    fecha_inicio = request.args.get('from')
+    fecha_fin    = request.args.get('to')
+
+    if not fecha_inicio or not fecha_fin:
+        return jsonify({"error": "Debe enviar parámetros 'from' y 'to' en formato YYYY-MM-DD"}), 400
+
+    try:
+        dt_ini = datetime.strptime(fecha_inicio, '%Y-%m-%d').date()
+        dt_fin = datetime.strptime(fecha_fin, '%Y-%m-%d').date()
+    except ValueError:
+        return jsonify({"error": "Formato de fecha inválido"}), 400
+
+    try:
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        # 🧠 Obtener sector_id del chofer
+        cursor.execute("SELECT sector_id FROM choferes WHERE dni = %s", (dni,))
+        chofer = cursor.fetchone()
+        if not chofer:
+            return jsonify({"error": "DNI no encontrado"}), 404
+
+        sector_id = chofer['sector_id']
+
+        # 2) Traer indicadores del sector del chofer ----------------
+        cursor.execute("""
+            SELECT id, nombre, tipo_grafico, color_grafico, fill_grafico
+              FROM indicadores
+             WHERE sector_id = %s
+        """, (sector_id,))
+        indicadores = cursor.fetchall()
+
+        resultado = []
+
+        for indicador in indicadores:
+            indicador_id = indicador['id']
+
+            # 3) Obtener la serie histórica por indicador ------------
+            cursor.execute("""
+                SELECT DATE(fecha) AS fecha,
+                       ROUND(AVG(valor), 2) AS avg_val
+                  FROM kpis
+                 WHERE dni = %s
+                   AND indicador_id = %s
+                   AND DATE(fecha) BETWEEN %s AND %s
+              GROUP BY DATE(fecha)
+              ORDER BY DATE(fecha)
+            """, (dni, indicador_id, dt_ini, dt_fin))
+
+            rows = cursor.fetchall()
+            labels = [r['fecha'].strftime('%Y-%m-%d') for r in rows]
+            data   = [float(r['avg_val']) for r in rows]
+
+            resultado.append({
+                "id": indicador_id,
+                "nombre": indicador['nombre'],
+                "tipo": indicador.get('tipo_grafico') or "line",
+                "color": indicador.get('color_grafico') or "#1565C0",
+                "fill": bool(indicador.get('fill_grafico')),
+                "labels": labels,
+                "data": data
+            })
+
+        return jsonify({"indicadores": resultado})
+
+    except Exception as e:
+        return jsonify({"error": "Error interno del servidor", "detalle": str(e)}), 500
+
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
