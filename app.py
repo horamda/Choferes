@@ -1831,7 +1831,9 @@ def buscar_articulos():
         query = """
             SELECT Articulo AS codigo, DescripcionArticulo AS descripcion, Marca, Calibre
             FROM articulosCSV
-            WHERE 1 = 1
+            WHERE Activo = 'SI'
+              AND UsadoEnDispositivoMovil = 'SI'
+              AND Anulado = 'NO'
         """
         params = []
 
@@ -1859,6 +1861,7 @@ def buscar_articulos():
     finally:
         if cursor: cursor.close()
         if conn: conn.close()
+
 
 @app.route('/api/filtros_articulos')
 def obtener_filtros_articulos():
