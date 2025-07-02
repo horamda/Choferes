@@ -1829,14 +1829,14 @@ def buscar_articulos():
         cursor = conn.cursor(dictionary=True)
 
         query = """
-            SELECT Articulo AS codigo, Descripcion AS descripcion, Marca, Calibre
+            SELECT Articulo AS codigo, DescripcionArticulo AS descripcion, Marca, Calibre
             FROM articulosCSV
             WHERE 1 = 1
         """
         params = []
 
         if descripcion:
-            query += " AND Descripcion LIKE %s"
+            query += " AND descripcion LIKE %s"
             params.append(f"%{descripcion}%")
 
         if marca:
@@ -1847,7 +1847,7 @@ def buscar_articulos():
             query += " AND Calibre LIKE %s"
             params.append(f"%{calibre}%")
 
-        query += " ORDER BY Descripcion LIMIT 50"
+        query += " ORDER BY DescripcionArticulo LIMIT 50"
 
         cursor.execute(query, params)
         resultados = cursor.fetchall()
