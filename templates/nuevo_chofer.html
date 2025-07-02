@@ -28,6 +28,15 @@
                 <option value="mantenimiento">Mantenimiento 🛠️</option>
             </select>
         </div>
+        <div class="mb-3">
+            <label class="form-label">Sucursal</label>
+            <select name="sucursal_id" class="form-select" required>
+                <option value="">-- Seleccionar sucursal --</option>
+                {% for s in sucursales %}
+                    <option value="{{ s.id }}">{{ s.nombre }}</option>
+                {% endfor %}
+            </select>
+        </div>
         <button type="submit" class="btn btn-primary">Guardar</button>
     </form>
 </div>

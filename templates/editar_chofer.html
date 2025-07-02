@@ -24,6 +24,15 @@
             </select>
         </div>
         <div class="mb-3">
+            <label class="form-label">Sucursal</label>
+            <select name="sucursal_id" class="form-select" required>
+                <option value="">-- Seleccionar sucursal --</option>
+                {% for s in sucursales %}
+                    <option value="{{ s.id }}" {% if s.id == sucursal_id %}selected{% endif %}>{{ s.nombre }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="mb-3">
             <label class="form-label">Actualizar Foto</label>
             <input type="file" name="imagen" class="form-control" accept="image/*">
         </div>

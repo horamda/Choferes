@@ -277,30 +277,56 @@ def historial_push():
 @app.route('/admin/choferes')
 @login_required
 def listar_choferes():
+    sucursal_id = request.args.get('sucursal_id')  # viene del select
     conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT dni, nombre, sector FROM choferes")
+    cursor = conn.cursor(dictionary=True)
+
+    # Cargar todas las sucursales para el select
+    cursor.execute("SELECT id, nombre FROM sucursales WHERE activa = TRUE")
+    sucursales = cursor.fetchall()
+
+    if sucursal_id:
+        cursor.execute("""
+            SELECT c.dni, c.nombre, c.sector, s.nombre AS sucursal
+            FROM choferes c
+            LEFT JOIN sucursales s ON c.sucursal_id = s.id
+            WHERE c.sucursal_id = %s
+        """, (sucursal_id,))
+    else:
+        cursor.execute("""
+            SELECT c.dni, c.nombre, c.sector, s.nombre AS sucursal
+            FROM choferes c
+            LEFT JOIN sucursales s ON c.sucursal_id = s.id
+        """)
+    
     choferes = cursor.fetchall()
     cursor.close()
     conn.close()
-    return render_template('choferes.html', choferes=choferes)
+
+    return render_template('choferes.html', choferes=choferes, sucursales=sucursales, sucursal_id=sucursal_id)
+
+
 
 @app.route('/admin/choferes/nuevo', methods=['GET', 'POST'])
 @login_required
 def nuevo_chofer():
+    conn = get_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    # Obtener sucursales para el combo
+    cursor.execute("SELECT id, nombre FROM sucursales WHERE activa = TRUE")
+    sucursales = cursor.fetchall()
+
     if request.method == 'POST':
-        dni    = request.form['dni']
+        dni = request.form['dni']
         nombre = request.form['nombre']
         sector = request.form['sector']
+        sucursal_id = request.form['sucursal_id']
         imagen = request.files['imagen']
 
-        # 🖼️ Redimensionar si se cargó imagen
         imagen_blob = None
         if imagen and imagen.filename:
             imagen_blob = redimensionar_imagen(imagen.read())
-
-        conn = get_connection()
-        cursor = conn.cursor()
 
         cursor.execute("SELECT 1 FROM choferes WHERE dni = %s", (dni,))
         if cursor.fetchone():
@@ -310,9 +336,9 @@ def nuevo_chofer():
             return redirect(url_for('nuevo_chofer'))
 
         cursor.execute("""
-            INSERT INTO choferes (dni, nombre, sector, imagen)
-            VALUES (%s, %s, %s, %s)
-        """, (dni, nombre, sector, imagen_blob))
+            INSERT INTO choferes (dni, nombre, sector, sucursal_id, imagen)
+            VALUES (%s, %s, %s, %s, %s)
+        """, (dni, nombre, sector, sucursal_id, imagen_blob))
 
         conn.commit()
         cursor.close()
@@ -321,31 +347,51 @@ def nuevo_chofer():
         flash("✅ Chofer creado correctamente", "success")
         return redirect(url_for('listar_choferes'))
 
-    return render_template('nuevo_chofer.html')
+    cursor.close()
+    conn.close()
+    return render_template('nuevo_chofer.html', sucursales=sucursales)
 
 @app.route('/admin/choferes/editar/<dni>', methods=['GET', 'POST'])
 @login_required
 def editar_chofer(dni):
     conn = get_connection()
-    cursor = conn.cursor()
+    cursor = conn.cursor(dictionary=True)
+
+    # Obtener sucursales para dropdown
+    cursor.execute("SELECT id, nombre FROM sucursales WHERE activa = TRUE")
+    sucursales = cursor.fetchall()
 
     if request.method == 'POST':
         nombre = request.form['nombre']
         sector = request.form['sector']
+        sucursal_id = request.form['sucursal_id']
         imagen = request.files['imagen']
-        if imagen:
+
+        if imagen and imagen.filename:
             imagen_blob = redimensionar_imagen(imagen.read())
-            cursor.execute("UPDATE choferes SET nombre = %s, sector = %s, imagen = %s WHERE dni = %s",
-            (nombre, sector, imagen_blob, dni))
+            cursor.execute("""
+                UPDATE choferes
+                SET nombre = %s, sector = %s, sucursal_id = %s, imagen = %s
+                WHERE dni = %s
+            """, (nombre, sector, sucursal_id, imagen_blob, dni))
         else:
-            cursor.execute("UPDATE choferes SET nombre = %s, sector = %s WHERE dni = %s", (nombre, sector, dni))
+            cursor.execute("""
+                UPDATE choferes
+                SET nombre = %s, sector = %s, sucursal_id = %s
+                WHERE dni = %s
+            """, (nombre, sector, sucursal_id, dni))
+
         conn.commit()
         cursor.close()
         conn.close()
         flash("✅ Datos del chofer actualizados", "success")
         return redirect(url_for('listar_choferes'))
 
-    cursor.execute("SELECT nombre, sector FROM choferes WHERE dni = %s", (dni,))
+    # Cargar datos actuales del chofer
+    cursor.execute("""
+        SELECT nombre, sector, sucursal_id
+        FROM choferes WHERE dni = %s
+    """, (dni,))
     chofer = cursor.fetchone()
     cursor.close()
     conn.close()
@@ -354,8 +400,11 @@ def editar_chofer(dni):
         flash("❌ Chofer no encontrado", "danger")
         return redirect(url_for('listar_choferes'))
 
-    return render_template('editar_chofer.html', dni=dni, nombre=chofer[0], sector=chofer[1])
-
+    return render_template('editar_chofer.html', dni=dni, nombre=chofer['nombre'],
+                           sector=chofer['sector'], sucursal_id=chofer['sucursal_id'],
+                           sucursales=sucursales)
+    
+    
 @app.route('/admin/choferes/eliminar/<dni>', methods=['POST'])
 @login_required
 def eliminar_chofer(dni):
@@ -1707,4 +1756,170 @@ def indicadores_series(dni):
     finally:
         if cursor: cursor.close()
         if conn: conn.close()
+        
+@app.route('/api/pedidos', methods=['POST'])
+def guardar_pedido():
+    try:
+        data = request.get_json()
 
+        # 1) Validar campos obligatorios
+        dni         = data.get('dni')
+        sucursal_id = data.get('sucursal_id')
+        observaciones = data.get('observaciones', '')
+        items       = data.get('items', [])
+
+        if not dni or not sucursal_id or not items:
+            return jsonify({"error": "Debe enviar 'dni', 'sucursal_id' y 'items'"}), 400
+
+        conn = get_connection()
+        cursor = conn.cursor()
+
+        # 2) Insertar pedido en encabezado
+        cursor.execute("""
+            INSERT INTO pedidos_mercaderia (dni, sucursal_id, observaciones)
+            VALUES (%s, %s, %s)
+        """, (dni, sucursal_id, observaciones))
+        pedido_id = cursor.lastrowid
+
+        # 3) Insertar detalle
+        for item in items:
+            articulo_id = item.get('articulo_id')
+            cantidad    = item.get('cantidad')
+            descripcion = item.get('descripcion', '')
+
+            if not articulo_id or not cantidad:
+                continue  # ignoramos ítems incompletos
+
+            cursor.execute("""
+                INSERT INTO detalle_pedido_mercaderia (pedido_id, articulo_id, cantidad, descripcion)
+                VALUES (%s, %s, %s, %s)
+            """, (pedido_id, articulo_id, cantidad, descripcion))
+
+        conn.commit()
+
+        return jsonify({
+            "mensaje": "✅ Pedido guardado correctamente",
+            "pedido_id": pedido_id
+        }), 201
+
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        return jsonify({
+            "error": "Error interno del servidor",
+            "detalle": str(e)
+        }), 500
+
+    finally:
+        if 'cursor' in locals():
+            cursor.close()
+        if 'conn' in locals():
+            conn.close()
+
+
+
+@app.route('/api/buscar_articulos', methods=['GET'])
+def buscar_articulos():
+    descripcion = request.args.get('q', '').strip()
+    marca = request.args.get('marca', '').strip()
+    calibre = request.args.get('calibre', '').strip()
+
+    try:
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        query = """
+            SELECT Articulo AS codigo, Descripcion AS descripcion, Marca, Calibre
+            FROM articulosCSV
+            WHERE 1 = 1
+        """
+        params = []
+
+        if descripcion:
+            query += " AND Descripcion LIKE %s"
+            params.append(f"%{descripcion}%")
+
+        if marca:
+            query += " AND Marca LIKE %s"
+            params.append(f"%{marca}%")
+
+        if calibre:
+            query += " AND Calibre LIKE %s"
+            params.append(f"%{calibre}%")
+
+        query += " ORDER BY Descripcion LIMIT 50"
+
+        cursor.execute(query, params)
+        resultados = cursor.fetchall()
+
+        return jsonify(resultados)
+
+    except Exception as e:
+        return jsonify({"error": "Error en la búsqueda", "detalle": str(e)}), 500
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+@app.route('/api/filtros_articulos')
+def obtener_filtros_articulos():
+    conn = get_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    try:
+        cursor.execute("SELECT DISTINCT marca FROM articuloscsv WHERE marca IS NOT NULL AND marca != ''")
+        marcas = [row['marca'] for row in cursor.fetchall()]
+
+        cursor.execute("SELECT DISTINCT calibre FROM articuloscsv WHERE calibre IS NOT NULL AND calibre != ''")
+        calibres = [row['calibre'] for row in cursor.fetchall()]
+
+        return jsonify({
+            "marcas": marcas,
+            "calibres": calibres
+        })
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.route('/api/marcas')
+def obtener_marcas():
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT DISTINCT Marca 
+            FROM articulosCSV 
+            WHERE Marca IS NOT NULL AND Marca != '' 
+            ORDER BY Marca
+        """)
+        marcas = [row[0] for row in cursor.fetchall()]
+        return jsonify({"marcas": marcas})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+        
+@app.route('/api/calibres')
+def obtener_calibres():
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT DISTINCT Calibre 
+            FROM articulosCSV 
+            WHERE Calibre IS NOT NULL AND Calibre != '' 
+            ORDER BY Calibre
+        """)
+        calibres = [row[0] for row in cursor.fetchall()]
+        return jsonify({"calibres": calibres})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+        
+        
+
+#if __name__ == '__main__':
+#    app.run(debug=True, host='0.0.0.0', port=5000)
+    
