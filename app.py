@@ -518,7 +518,7 @@ def avisos(dni):
         conn.close()
 
 @app.route('/avisosh/<dni>')
-def avisos(dni):
+def avisosh(dni):
     if not dni.isdigit():
         return jsonify({'error': 'DNI inválido'}), 400
 
