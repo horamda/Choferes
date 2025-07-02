@@ -1836,7 +1836,7 @@ def buscar_articulos():
         params = []
 
         if descripcion:
-            query += " AND descripcion LIKE %s"
+            query += " AND DescripcionArticulo LIKE %s"
             params.append(f"%{descripcion}%")
 
         if marca:
