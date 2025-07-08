@@ -330,7 +330,7 @@ def nuevo_chofer():
 
         cursor.execute("SELECT 1 FROM choferes WHERE dni = %s", (dni,))
         if cursor.fetchone():
-            flash("❌ Ya existe un chofer con ese DNI", "danger")
+            flash("❌ Ya existe un empleado con ese DNI", "danger")
             cursor.close()
             conn.close()
             return redirect(url_for('nuevo_chofer'))
@@ -344,7 +344,7 @@ def nuevo_chofer():
         cursor.close()
         conn.close()
 
-        flash("✅ Chofer creado correctamente", "success")
+        flash("✅ Empleado creado correctamente", "success")
         return redirect(url_for('listar_choferes'))
 
     cursor.close()
@@ -384,7 +384,7 @@ def editar_chofer(dni):
         conn.commit()
         cursor.close()
         conn.close()
-        flash("✅ Datos del chofer actualizados", "success")
+        flash("✅ Datos del Empleado actualizados", "success")
         return redirect(url_for('listar_choferes'))
 
     # Cargar datos actuales del chofer
@@ -397,7 +397,7 @@ def editar_chofer(dni):
     conn.close()
 
     if not chofer:
-        flash("❌ Chofer no encontrado", "danger")
+        flash("❌ Empleado no encontrado", "danger")
         return redirect(url_for('listar_choferes'))
 
     return render_template('editar_chofer.html', dni=dni, nombre=chofer['nombre'],
@@ -414,7 +414,7 @@ def eliminar_chofer(dni):
     conn.commit()
     cursor.close()
     conn.close()
-    flash("🗑️ Chofer eliminado", "warning")
+    flash("🗑️ Empleado eliminado", "warning")
     return redirect(url_for('listar_choferes'))
 
 @app.route('/chofer/imagen/<dni>')
@@ -461,7 +461,7 @@ def login_chofer():
             conn.close()
 
     if not row:
-        return jsonify(success=False, message="Chofer no encontrado"), 404
+        return jsonify(success=False, message="Empleado no encontrado"), 404
 
     nombre, sector = row
 
@@ -615,57 +615,57 @@ def subida_resultados():
         lineas_invalidas = 0
 
         try:
-            conn = get_connection()
-            cursor = conn.cursor()
+            with get_connection() as conn:
+                cursor = conn.cursor()
 
-            for i, linea in enumerate(archivo.stream.readlines(), start=1):
-                try:
-                    decoded = linea.decode('utf-8').strip()
-                    if not decoded or decoded.startswith('#'):
-                        continue
-
-                    partes = decoded.split(',')
-                    if len(partes) != 5:
-                        print(f"[Línea {i}] ❌ Formato incorrecto: {decoded}")
-                        lineas_invalidas += 1
-                        continue
-
-                    dni, fecha, indicador_id, sector_id, valor = partes
-
+                for i, linea in enumerate(archivo.stream.readlines(), start=1):
                     try:
-                        indicador_id = int(indicador_id)
-                        sector_id = int(sector_id)
-                        valor = float(valor)
-                    except ValueError as ve:
-                        print(f"[Línea {i}] ❌ Error de conversión: {ve} - {decoded}")
+                        decoded = linea.decode('utf-8').strip()
+                        if not decoded or decoded.startswith('#'):
+                            continue
+
+                        partes = decoded.split(',')
+                        if len(partes) != 5:
+                            print(f"[Línea {i}] ❌ Formato incorrecto: {decoded}")
+                            lineas_invalidas += 1
+                            continue
+
+                        dni, fecha_str, indicador_id, sector_id, valor = partes
+
+                        # Validar tipos
+                        try:
+                            fecha = datetime.strptime(fecha_str, '%Y-%m-%d').date()
+                            indicador_id = int(indicador_id)
+                            sector_id = int(sector_id)
+                            valor = float(valor)
+                        except ValueError as ve:
+                            print(f"[Línea {i}] ❌ Error de conversión: {ve} - {decoded}")
+                            lineas_invalidas += 1
+                            continue
+
+                        cursor.execute("""
+                            INSERT INTO kpis (dni, fecha, indicador_id, sector_id, valor)
+                            VALUES (%s, %s, %s, %s, %s)
+                        """, (dni, fecha, indicador_id, sector_id, valor))
+
+                        cursor.execute("SELECT nombre FROM indicadores WHERE id = %s", (indicador_id,))
+                        resultado = cursor.fetchone()
+                        nombre_indicador = resultado[0] if resultado else f"ID {indicador_id}"
+
+                        registros.append({
+                            'dni': dni,
+                            'fecha': fecha,
+                            'indicador': nombre_indicador,
+                            'valor': valor
+                        })
+
+                        registros_insertados += 1
+
+                    except Exception as e:
+                        print(f"[Línea {i}] ⚠️ Error al procesar la línea: {e} - {decoded}")
                         lineas_invalidas += 1
-                        continue
 
-                    cursor.execute("""
-                        INSERT INTO kpis (dni, fecha, indicador_id, sector_id, valor)
-                        VALUES (%s, %s, %s, %s, %s)
-                    """, (dni, fecha, indicador_id, sector_id, valor))
-
-                    # Obtener el nombre del indicador (si no existe, fallback al ID)
-                    cursor.execute("SELECT nombre FROM indicadores WHERE id = %s", (indicador_id,))
-                    resultado = cursor.fetchone()
-                    nombre_indicador = resultado[0] if resultado else f"ID {indicador_id}"
-
-                    registros.append({
-                        'dni': dni,
-                        'fecha': fecha,
-                        'indicador': nombre_indicador,
-                        'valor': valor
-                    })
-                    registros_insertados += 1
-
-                except Exception as e:
-                    print(f"[Línea {i}] ⚠️ Error SQL: {e} - {decoded}")
-                    lineas_invalidas += 1
-
-            conn.commit()
-            cursor.close()
-            conn.close()
+                conn.commit()
 
             mensaje = f"✅ {registros_insertados} registros cargados correctamente."
             if lineas_invalidas:
@@ -676,7 +676,6 @@ def subida_resultados():
             flash(f"❌ Error general al procesar el archivo: {str(e)}", "danger")
 
     return render_template('subida_resultados.html', registros=registros)
-
 
 @app.route('/kpis/hoy_o_ultimo/<dni>')
 def kpis_hoy_o_ultimo(dni):
@@ -1849,7 +1848,7 @@ def buscar_articulos():
             query += " AND Calibre LIKE %s"
             params.append(f"%{calibre}%")
 
-        query += " ORDER BY DescripcionArticulo LIMIT 50"
+        query += " ORDER BY DescripcionArticulo"
 
         cursor.execute(query, params)
         resultados = cursor.fetchall()
@@ -1920,9 +1919,99 @@ def obtener_calibres():
     finally:
         cursor.close()
         conn.close()
-        
+
+@app.route('/dashboard/pedido/<int:pedido_id>')
+def detalle_pedido(pedido_id):
+    if 'admin' not in session:
+        return redirect(url_for('login'))
+
+    conn = get_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute("SELECT * FROM pedidos_mercaderia WHERE id = %s", (pedido_id,))
+    pedido = cursor.fetchone()
+
+    cursor.execute("""
+        SELECT articulo_id, descripcion, cantidad
+        FROM detalle_pedido_mercaderia
+        WHERE pedido_id = %s
+    """, (pedido_id,))
+    items = cursor.fetchall()
+
+    cursor.close()
+    conn.close()
+
+    return render_template('pedido_detalle.html', pedido=pedido, items=items)
+
+
+@app.route('/dashboard/pedido/<int:pedido_id>/estado', methods=['POST'])
+def cambiar_estado_pedido(pedido_id):
+    if 'admin' not in session:
+        return redirect(url_for('login'))
+
+    nuevo_estado = request.form.get('estado')
+    if nuevo_estado not in ['pendiente', 'procesando', 'completado', 'cancelado']:
+        flash('Estado inválido', 'danger')
+        return redirect(url_for('admin_pedidos'))
+
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("UPDATE pedidos_mercaderia SET estado = %s WHERE id = %s", (nuevo_estado, pedido_id))
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+    flash(f'Pedido #{pedido_id} actualizado a "{nuevo_estado}"', 'success')
+    return redirect(url_for('admin_pedidos'))
+
+@app.route('/dashboard/pedidos')
+@login_required
+def admin_pedidos():
+    conn = get_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute("""
+        SELECT p.id, p.dni, c.nombre, p.sucursal_id, p.fecha, p.estado
+        FROM pedidos_mercaderia p
+        LEFT JOIN choferes c ON p.dni = c.dni
+        ORDER BY p.fecha DESC
+    """)
+    pedidos = cursor.fetchall()
+
+    cursor.close()
+    conn.close()
+
+    return render_template('pedidos_admin.html', pedidos=pedidos)
+           
+@app.route('/api/historial_pedidos/<dni>', methods=['GET'])
+def historial_pedidos(dni):
+    conn = get_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    try:
+        cursor.execute("""
+             SELECT p.id, p.dni, p.fecha, p.estado, p.sucursal_id, p.observaciones, c.nombre
+             FROM pedidos_mercaderia p
+             LEFT JOIN choferes c ON p.dni = c.dni
+             WHERE p.dni = %s
+             ORDER BY p.fecha DESC
+             """, (dni,))
+        pedidos = cursor.fetchall()
+
+        for pedido in pedidos:
+            cursor.execute("""
+             SELECT articulo_id, descripcion, cantidad
+             FROM detalle_pedido_mercaderia
+             WHERE pedido_id = %s
+             """, (pedido['id'],))
+            pedido['items'] = cursor.fetchall()
+
+        return jsonify(pedidos)
+    finally:
+        cursor.close()
+        conn.close()   
         
 
-#if __name__ == '__main__':
-#    app.run(debug=True, host='0.0.0.0', port=5000)
+if __name__ == '__main__':
+    app.run(debug=True, host='0.0.0.0', port=5000)
     

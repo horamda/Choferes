@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Pedidos de Mercadería{% endblock %}
+{% block header %}Gestión de Pedidos{% endblock %}
+
+{% block content %}
+<h4>Listado de pedidos</h4>
+
+<div class="table-responsive">
+  <table class="table table-bordered table-hover table-sm align-middle">
+    <thead class="table-dark">
+      <tr>
+        <th>ID</th>
+        <th>Fecha</th>
+        <th>DNI</th>
+        <th>Empleado</th>
+        <th>Sucursal</th>
+        <th>Estado</th>
+        <th>Acciones</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for p in pedidos %}
+      <tr>
+        <td>{{ p.id }}</td>
+        <td>{{ p.fecha }}</td>
+        <td>{{ p.dni }}</td>
+        <td>{{ p.nombre or '—' }}</td>
+        <td>{{ p.sucursal_id }}</td>
+        <td><span class="badge bg-{{ p.estado }}">{{ p.estado }}</span></td>
+        <td>
+          <a href="{{ url_for('detalle_pedido', pedido_id=p.id) }}" class="btn btn-sm btn-info">
+            <i class="bi bi-eye"></i>
+          </a>
+          <form action="{{ url_for('cambiar_estado_pedido', pedido_id=p.id) }}" method="post" class="d-inline">
+            <select name="estado" onchange="this.form.submit()" class="form-select form-select-sm">
+              <option value="pendiente"   {% if p.estado == 'pendiente' %}selected{% endif %}>Pendiente</option>
+              <option value="procesando" {% if p.estado == 'procesando' %}selected{% endif %}>Procesando</option>
+              <option value="completado" {% if p.estado == 'completado' %}selected{% endif %}>Completado</option>
+              <option value="cancelado"  {% if p.estado == 'cancelado'  %}selected{% endif %}>Cancelado</option>
+            </select>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
