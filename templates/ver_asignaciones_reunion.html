@@ -1,0 +1,41 @@
+{% extends 'base.html' %}
+
+{% block title %}Asignaciones de Reunión{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+  <h2>📋 Asignaciones - {{ reunion.titulo }}</h2>
+
+  <a href="{{ url_for('nueva_asignacion', id_reunion=reunion.id) }}" class="btn btn-success mb-3">➕ Nueva Asignación</a>
+  <a href="{{ url_for('listar_reuniones_admin') }}" class="btn btn-secondary mb-3">↩️ Volver</a>
+
+  {% if asignaciones %}
+    <table class="table table-bordered">
+      <thead class="table-light">
+        <tr>
+          <th>DNI</th>
+          <th>Nombre</th>
+          <th>Sector</th>
+          <th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for asignacion in asignaciones %}
+          <tr>
+            <td>{{ asignacion.dni }}</td>
+            <td>{{ asignacion.nombre }}</td>
+            <td>{{ asignacion.sector }}</td>
+            <td>
+              <form method="POST" action="{{ url_for('eliminar_asignacion', id_asignacion=asignacion.id, id_reunion=reunion.id) }}" onsubmit="return confirm('¿Estás seguro de eliminar esta asignación?')">
+                <button type="submit" class="btn btn-danger btn-sm">🗑️ Eliminar</button>
+              </form>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <div class="alert alert-info">No hay choferes asignados aún.</div>
+  {% endif %}
+</div>
+{% endblock %}

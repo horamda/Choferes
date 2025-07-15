@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Asignaciones{% endblock %}
+{% block content %}
+<div class="container mt-4">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="mb-0">👥 Asignaciones</h2>
+    <a href="{{ url_for('nueva_asignacion') }}" class="btn btn-success">➕ Nueva</a>
+  </div>
+
+  <table class="table table-bordered table-hover text-center align-middle">
+    <thead class="table-dark">
+      <tr>
+        <th>ID</th>
+        <th>Reunión</th>
+        <th>DNI</th>
+        <th>Nombre</th>
+        <th>Sector</th>
+        <th>Obligatoria</th>
+        <th>Acciones</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for a in asignaciones %}
+      <tr>
+        <td>{{ a.id }}</td>
+        <td>{{ a.titulo }}</td>
+        <td>{{ a.dni }}</td>
+        <td>{{ a.nombre }}</td>
+        <td>{{ a.sector }}</td>
+        <td>
+          {% if a.obligatorio %}
+            <span class="badge bg-success">Sí</span>
+          {% else %}
+            <span class="badge bg-secondary">No</span>
+          {% endif %}
+        </td>
+        <td>
+          <a href="{{ url_for('editar_asignacion', id=a.id) }}" class="btn btn-sm btn-warning">✏️</a>
+          <form action="{{ url_for('eliminar_asignacion', id=a.id) }}" method="POST" class="d-inline"
+                onsubmit="return confirm('¿Eliminar esta asignación?')">
+            <button class="btn btn-sm btn-danger">🗑️</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
+
+

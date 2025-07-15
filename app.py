@@ -1,14 +1,12 @@
 from flask import Flask, request, jsonify, render_template, redirect, url_for, session, send_file, flash
 from flask_cors import CORS
-from datetime import timedelta
 import mysql.connector
 from config import MYSQL_CONFIG
 import os
 from dotenv import load_dotenv
 from io import BytesIO
 from functools import wraps
-from datetime import datetime, timedelta
-from datetime import date
+from datetime import datetime, timedelta,date
 from notificaciones import enviar_push
 import re
 import logging
@@ -17,14 +15,73 @@ import base64
 import jwt
 from mysql.connector import Error  
 from utils import redimensionar_imagen
+import qrcode
+from geopy.distance import geodesic
+from PIL import Image
+
+
+
+
 
 # Configurar logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-
 load_dotenv()
+
+
+def generar_qr(contenido, nombre_base, logo_path="static/logo.png"):
+    """
+    Genera un QR en static/qrcodes con logo opcional.
+    Devuelve la ruta relativa (para guardar en DB) y absoluta (para guardar el archivo).
+    """
+    output_dir = os.path.join("static", "qrcodes")
+    os.makedirs(output_dir, exist_ok=True)
+
+    qr = qrcode.QRCode(
+        error_correction=qrcode.constants.ERROR_CORRECT_H,
+        box_size=10,
+        border=4,
+    )
+    qr.add_data(contenido)
+    qr.make(fit=True)
+    img_qr = qr.make_image(fill_color="black", back_color="white").convert("RGB")
+
+    try:
+        if os.path.exists(logo_path):
+            logo = Image.open(logo_path).convert("RGBA")
+            logo_size = int(img_qr.size[0] * 0.25)
+            logo = logo.resize((logo_size, logo_size))
+            pos = ((img_qr.size[0] - logo_size) // 2, (img_qr.size[1] - logo_size) // 2)
+            img_qr.paste(logo, pos, mask=logo if logo.mode == 'RGBA' else None)
+    except Exception as e:
+        print(f"⚠️ Error al agregar logo al QR: {e}")
+
+    # Asegurar extensión correcta
+    if not nombre_base.endswith(".png"):
+        nombre_base += ".png"
+
+    filename = os.path.join(output_dir, nombre_base)
+    img_qr.save(filename)
+
+    # Ruta relativa para la base de datos (sin "static/")
+    ruta_relativa = os.path.relpath(filename, "static")
+    return ruta_relativa, filename
+
+
+
+        
+#def generar_qr(contenido, nombre_archivo):
+#    """
+#    Genera un código QR PNG y lo guarda en /static/qrcodes.
+#    Devuelve la ruta relativa del archivo generado.
+#    """
+#    img = qrcode.make(contenido)
+#    path = f'static/qrcodes/{nombre_archivo}.png'
+#    img.save(path)
+#    return path
+
 
 app = Flask(__name__)
 CORS(app)
@@ -2010,7 +2067,505 @@ def historial_pedidos(dni):
     finally:
         cursor.close()
         conn.close()   
-        
+#///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////#
+@app.route('/admin/reuniones')
+def admin_reuniones():
+    if 'admin' not in session:
+        return redirect(url_for('login'))
+
+    conn = get_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    try:
+        cursor.execute("SELECT * FROM reuniones WHERE activa = TRUE ORDER BY id DESC")
+        reuniones = cursor.fetchall()
+    finally:
+        cursor.close()
+        conn.close()
+
+    return render_template('admin_reuniones.html', reuniones=reuniones)        
+
+
+#NUEVA REUNION
+@app.route("/admin/reuniones/nueva", methods=["GET", "POST"])
+def nueva_reunion_admin():
+    if request.method == "POST":
+        try:
+            titulo = request.form["titulo"]
+            frecuencia = request.form["frecuencia"]
+            dia_semana = int(request.form["dia_semana"])
+            hora = request.form["hora"]
+
+            conn = get_connection()
+            cursor = conn.cursor()
+
+            # Insertar la reunión
+            cursor.execute("""
+                INSERT INTO reuniones (titulo, frecuencia, dia_semana, hora)
+                VALUES (%s, %s, %s, %s)
+            """, (titulo, frecuencia, dia_semana, hora))
+            conn.commit()
+
+            reunion_id = cursor.lastrowid
+            qr_url = f"https://tusitio.com/asistencia_qr/{reunion_id}"
+            qr_filename_base = f"reunion_{reunion_id}"  # sin extensión
+
+            # 🧠 Generar QR y obtener ruta relativa
+            ruta_relativa, _ = generar_qr(qr_url, qr_filename_base)
+
+            # Guardar solo la ruta relativa en la base (ej. 'qrcodes/reunion_13.png')
+            cursor.execute("UPDATE reuniones SET qr_code = %s WHERE id = %s", (ruta_relativa, reunion_id))
+            conn.commit()
+
+            cursor.close()
+            conn.close()
+
+            return redirect(url_for('admin_reuniones'))
+
+        except Exception as e:
+            return f"❌ Error al procesar el formulario: {e}"
+
+    return render_template("admin_reunion_nueva.html")
+
+#MARCAR ASISTENCIA
+
+@app.route('/api/marcar_asistencia', methods=['POST'])
+def marcar_asistencia():
+    data = request.get_json()
+    reunion_id = data['reunion_id']
+    dni = data['dni']
+    lat = float(data['lat'])
+    lon = float(data['lon'])
+
+    RADIO_METROS = 50
+    LAT_CENTRO = -36.778300
+    LON_CENTRO = -58.941200
+    ventana_tolerancia = timedelta(minutes=30)
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    # Buscar la reunión
+    cursor.execute("""
+        SELECT dia_semana, hora
+        FROM reuniones
+        WHERE id = %s AND activa = TRUE
+    """, (reunion_id,))
+    row = cursor.fetchone()
+
+    if not row:
+        cursor.close()
+        conn.close()
+        return jsonify({"error": "❌ Reunión no encontrada o inactiva"}), 404
+
+    dia_semana, hora_reunion = row
+    ahora = datetime.now()
+
+    # Validar día de la semana
+    if ahora.weekday() != dia_semana:
+        cursor.close()
+        conn.close()
+        return jsonify({"error": "📅 No es el día programado para la reunión"}), 403
+
+    # Validar hora con tolerancia
+    hora_reunion_dt = datetime.combine(
+        ahora.date(),
+        datetime.strptime(str(hora_reunion), "%H:%M:%S").time()
+    )
+    if not (hora_reunion_dt - ventana_tolerancia <= ahora <= hora_reunion_dt + ventana_tolerancia):
+        cursor.close()
+        conn.close()
+        return jsonify({"error": "⏰ Fuera del horario permitido"}), 403
+    print("ventana_tolerancia =", ventana_tolerancia)
+    print("hora_reunion_dt =", hora_reunion_dt)
+    # Validar geolocalización
+    distancia = geodesic((lat, lon), (LAT_CENTRO, LON_CENTRO)).meters
+    if distancia > RADIO_METROS:
+        cursor.close()
+        conn.close()
+        return jsonify({"error": f"📍 Ubicación fuera del predio autorizado ({distancia:.1f}m)"}), 403
+
+    # Verificar si ya se marcó asistencia hoy
+    fecha_actual = ahora.date()
+    cursor.execute("""
+        SELECT id FROM asistencias_reuniones
+        WHERE id_reunion = %s AND dni_chofer = %s AND fecha = %s
+    """, (reunion_id, dni, fecha_actual))
+    if cursor.fetchone():
+        cursor.close()
+        conn.close()
+        return jsonify({"error": "✅ Ya registraste tu asistencia"}), 409
+
+    # Registrar asistencia
+    cursor.execute("""
+        INSERT INTO asistencias_reuniones (id_reunion, dni_chofer, fecha, hora_entrada, latitud, longitud, asistencia)
+        VALUES (%s, %s, %s, %s, %s, %s, TRUE)
+    """, (reunion_id, dni, fecha_actual, ahora.time(), lat, lon))
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+    return jsonify({"mensaje": "🟢 Asistencia registrada correctamente"}), 200
+#EDITAR REUNION
+@app.route("/admin/reuniones/<int:id>/editar", methods=["GET", "POST"])
+def editar_reunion_admin(id):
+    conn = get_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute("SELECT * FROM reuniones WHERE id = %s", (id,))
+    reunion = cursor.fetchone()
+
+    # ✅ Convertir timedelta a time para el template
+    if reunion and isinstance(reunion["hora"], timedelta):
+        reunion["hora"] = (datetime.min + reunion["hora"]).time()
+
+    if request.method == "POST":
+        titulo = request.form["titulo"]
+        frecuencia = request.form["frecuencia"]
+        dia_semana = int(request.form["dia_semana"])
+        hora = request.form["hora"]
+
+        cursor.execute("""
+            UPDATE reuniones 
+            SET titulo = %s, frecuencia = %s, dia_semana = %s, hora = %s 
+            WHERE id = %s
+        """, (titulo, frecuencia, dia_semana, hora, id))
+        conn.commit()
+
+        cursor.close()
+        conn.close()
+        return redirect(url_for("admin_reuniones"))
+
+    cursor.close()
+    conn.close()
+    return render_template("admin_reunion_editar.html", reunion=reunion)
+
+#BORRAR REUNION
+from datetime import datetime, timedelta
+
+@app.route("/admin/reuniones/<int:id>/eliminar", methods=["GET", "POST"])
+def eliminar_reunion_admin(id):
+    conn = get_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute("SELECT * FROM reuniones WHERE id = %s", (id,))
+    reunion = cursor.fetchone()
+    cursor.close()
+    conn.close()
+
+    # 🛠️ Solución: convertir hora de timedelta a objeto time
+    if isinstance(reunion["hora"], timedelta):
+        reunion["hora"] = (datetime.min + reunion["hora"]).time()
+
+    if request.method == "POST":
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM reuniones WHERE id = %s", (id,))
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return redirect(url_for("admin_reuniones"))
+
+    return render_template("admin_reunion_eliminar.html", reunion=reunion)
+
+
+@app.route("/admin/reuniones/<int:id_reunion>/regenerar_qr", methods=["GET"])
+def regenerar_qr_reunion(id_reunion):
+    try:
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        cursor.execute("SELECT * FROM reuniones WHERE id = %s", (id_reunion,))
+        reunion = cursor.fetchone()
+        cursor.close()
+        conn.close()
+
+        if not reunion:
+            flash("⚠️ Reunión no encontrada", "danger")
+            return redirect(url_for("listar_reuniones_admin"))
+
+        data = f"REUNION:{id_reunion}|{reunion['titulo']}|{reunion['frecuencia']}|{reunion['dia_semana']}|{reunion['hora']}"
+        nombre_archivo = f"reunion_{id_reunion}"
+        generar_qr(data, nombre_archivo)  # ✅ sin path ni extensión
+
+        flash("✅ QR regenerado correctamente", "success")
+        return redirect(url_for("admin_reuniones"))
+
+    except Exception as e:
+        return f"❌ Error al regenerar QR: {e}"
+
+@app.route("/admin/reuniones/<int:id_reunion>/asignaciones")
+def listar_asignaciones(id_reunion):
+    conn = get_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    # Info de la reunión
+    cursor.execute("SELECT * FROM reuniones WHERE id = %s", (id_reunion,))
+    reunion = cursor.fetchone()
+
+    # Asignaciones
+    cursor.execute("""
+        SELECT ar.id, ar.dni_chofer, c.nombre, c.sector, ar.obligatorio
+        FROM asignaciones_reuniones ar
+        JOIN choferes c ON ar.dni_chofer = c.dni
+        WHERE ar.id_reunion = %s
+    """, (id_reunion,))
+    asignaciones = cursor.fetchall()
+
+    cursor.close()
+    conn.close()
+    return render_template("asignaciones_listar.html", reunion=reunion, asignaciones=asignaciones)
+
+@app.route("/admin/reuniones/<int:id_reunion>/asignaciones/nuevo", methods=["GET"])
+def agregar_asignacion(id_reunion):
+    conn = get_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    # Obtener info de la reunión
+    cursor.execute("SELECT * FROM reuniones WHERE id = %s", (id_reunion,))
+    reunion = cursor.fetchone()
+
+    # Obtener choferes que NO estén asignados aún a esta reunión
+    cursor.execute("""
+        SELECT c.dni, c.nombre, c.sector
+        FROM choferes c
+        WHERE c.dni NOT IN (
+            SELECT dni_chofer FROM asignaciones_reuniones WHERE id_reunion = %s
+        )
+    """, (id_reunion,))
+    choferes_disponibles = cursor.fetchall()
+
+    cursor.close()
+    conn.close()
+    return render_template("asignaciones_nuevo.html", reunion=reunion, choferes=choferes_disponibles)
+
+@app.route("/admin/reuniones/<int:id_reunion>/asignar", methods=["POST"])
+def guardar_asignacion(id_reunion):
+    try:
+        dni_chofer = request.form["dni_chofer"]
+
+        conn = get_connection()
+        cursor = conn.cursor()
+
+        # Verificar si ya está asignado para evitar duplicados
+        cursor.execute("""
+            SELECT COUNT(*) FROM asignaciones_reuniones 
+            WHERE id_reunion = %s AND dni_chofer = %s
+        """, (id_reunion, dni_chofer))
+        ya_asignado = cursor.fetchone()[0]
+
+        if ya_asignado:
+            flash("⚠️ El chofer ya está asignado a esta reunión.", "warning")
+        else:
+            cursor.execute("""
+                INSERT INTO asignaciones_reuniones (id_reunion, dni_chofer)
+                VALUES (%s, %s)
+            """, (id_reunion, dni_chofer))
+            conn.commit()
+            flash("✅ Chofer asignado correctamente.", "success")
+
+        cursor.close()
+        conn.close()
+        return redirect(url_for("ver_asignaciones_reunion", id_reunion=id_reunion))
+
+    except Exception as e:
+        return f"❌ Error al guardar la asignación: {e}"
+
+@app.route("/admin/reuniones/<int:id_reunion>/asignaciones")
+def ver_asignaciones_reunion(id_reunion):
+    try:
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        # Obtener datos de la reunión
+        cursor.execute("SELECT * FROM reuniones WHERE id = %s", (id_reunion,))
+        reunion = cursor.fetchone()
+
+        if not reunion:
+            flash("⚠️ Reunión no encontrada", "danger")
+            return redirect(url_for("listar_reuniones_admin"))
+
+        # Obtener asignaciones con datos del chofer
+        cursor.execute("""
+            SELECT ar.id, c.dni, c.nombre, c.sector
+            FROM asignaciones_reuniones ar
+            JOIN choferes c ON ar.dni_chofer = c.dni
+            WHERE ar.id_reunion = %s
+        """, (id_reunion,))
+        asignaciones = cursor.fetchall()
+
+        cursor.close()
+        conn.close()
+
+        return render_template("ver_asignaciones_reunion.html", reunion=reunion, asignaciones=asignaciones)
+
+    except Exception as e:
+        return f"❌ Error al listar asignaciones: {e}"
+    
+@app.route("/admin/reuniones/<int:id_reunion>/asignaciones/<int:id_asignacion>/eliminar", methods=["POST"])
+def eliminar_asignacion(id_reunion, id_asignacion):
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+
+        # Eliminar la asignación
+        cursor.execute("DELETE FROM asignaciones_reuniones WHERE id = %s", (id_asignacion,))
+        conn.commit()
+
+        cursor.close()
+        conn.close()
+
+        flash("✅ Asignación eliminada correctamente", "success")
+        return redirect(url_for('ver_asignaciones_reunion', id_reunion=id_reunion))
+
+    except Exception as e:
+        return f"❌ Error al eliminar asignación: {e}"
+
+def obtener_reunion(id_reunion):
+    conexion = mysql.connector.connect(**MYSQL_CONFIG)
+    cursor = conexion.cursor(dictionary=True)
+    cursor.execute("SELECT * FROM reuniones WHERE id = %s", (id_reunion,))
+    reunion = cursor.fetchone()
+    conexion.close()
+    return reunion
+
+def obtener_asignaciones(id_reunion):
+    try:
+        conn = mysql.connector.connect(**MYSQL_CONFIG)
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT id, id_reunion, dni_chofer, obligatorio
+            FROM asignaciones_reuniones
+            WHERE id_reunion = %s
+        """, (id_reunion,))
+
+        asignaciones = []
+        for row in cursor.fetchall():
+            asignaciones.append({
+                'id': row[0],
+                'id_reunion': row[1],
+                'dni_chofer': row[2],
+                'obligatorio': bool(row[3]),
+            })
+
+        return asignaciones
+
+    except mysql.connector.Error as err:
+        print(f"Error al obtener asignaciones: {err}")
+        return []
+
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+    
+@app.route('/admin/reuniones/<int:id_reunion>/asignaciones_parcial')
+def ver_asignaciones_parcial(id_reunion):
+    reunion = obtener_reunion(id_reunion)
+    asignaciones = obtener_asignaciones(id_reunion)
+    return render_template('fragmento_asignaciones.html',
+                           reunion=reunion,
+                           asignaciones=asignaciones)
+
+@app.route("/admin/reuniones/<int:id_reunion>/asignaciones/<int:id_asignacion>/editar", methods=["GET", "POST"])
+def editar_asignacion(id_reunion, id_asignacion):
+    conn = get_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute("""
+        SELECT ar.id, ar.dni_chofer, ar.obligatorio, c.nombre, c.sector
+        FROM asignaciones_reuniones ar
+        JOIN choferes c ON ar.dni_chofer = c.dni
+        WHERE ar.id = %s
+    """, (id_asignacion,))
+    asignacion = cursor.fetchone()
+
+    cursor.execute("SELECT * FROM reuniones WHERE id = %s", (id_reunion,))
+    reunion = cursor.fetchone()
+
+    if request.method == "POST":
+        obligatorio = int(request.form.get("obligatorio", 0))
+        cursor.execute("UPDATE asignaciones_reuniones SET obligatorio = %s WHERE id = %s", (obligatorio, id_asignacion))
+        conn.commit()
+        cursor.close()
+        conn.close()
+        flash("✅ Asignación actualizada", "success")
+        return redirect(url_for("ver_asignaciones_reunion", id_reunion=id_reunion))
+
+    cursor.close()
+    conn.close()
+    return render_template("asignaciones_editar.html", reunion=reunion, asignacion=asignacion)
+
+
+@app.route("/admin/asignaciones/<int:id_asignacion>/toggle_obligatorio")
+def toggle_obligatorio(id_asignacion):
+    conn = get_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute("SELECT obligatorio, id_reunion FROM asignaciones_reuniones WHERE id = %s", (id_asignacion,))
+    asignacion = cursor.fetchone()
+
+    if not asignacion:
+        flash("Asignación no encontrada", "danger")
+        return redirect(url_for("reuniones_admin"))
+
+    nuevo_estado = 0 if asignacion["obligatorio"] else 1
+    cursor.execute(
+        "UPDATE asignaciones_reuniones SET obligatorio = %s WHERE id = %s",
+        (nuevo_estado, id_asignacion)
+    )
+    conn.commit()
+
+    reunion_id = asignacion["id_reunion"]
+
+    cursor.close()
+    conn.close()
+
+    flash("Estado de obligatoriedad actualizado", "success")
+    return redirect(url_for("reuniones_admin", _anchor=f"asignaciones-reunion-{reunion_id}"))
+
+def obtener_asignaciones(id_reunion):
+    conn = get_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute("""
+        SELECT ar.id, ar.dni_chofer, ar.obligatorio,
+               c.nombre, c.sector
+        FROM asignaciones_reuniones ar
+        JOIN choferes c ON ar.dni_chofer = c.dni
+        WHERE ar.id_reunion = %s
+    """, (id_reunion,))
+
+    asignaciones = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    return asignaciones
+def obtener_reuniones_con_asignaciones():
+    conn = get_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute("""
+        SELECT r.*, COUNT(ar.id) AS cantidad_asignados
+        FROM reuniones r
+        LEFT JOIN asignaciones_reuniones ar ON r.id = ar.id_reunion
+        GROUP BY r.id
+        ORDER BY r.id DESC
+    """)
+    reuniones = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    return reuniones
+def obtener_reunion(id):
+    conn = get_connection()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("SELECT * FROM reuniones WHERE id = %s", (id,))
+    reunion = cursor.fetchone()
+    cursor.close()
+    conn.close()
+    return reunion
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)

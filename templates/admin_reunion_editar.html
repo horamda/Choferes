@@ -1,0 +1,47 @@
+{% extends 'base.html' %}
+
+{% block title %}Editar Reunión{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+  <h2>✏️ Editar Reunión</h2>
+  <form method="POST" action="/admin/reuniones/{{ reunion.id }}/editar" class="mt-3">
+
+    <div class="mb-3">
+      <label for="titulo" class="form-label">Título</label>
+      <input type="text" class="form-control" name="titulo" id="titulo" value="{{ reunion.titulo }}" required>
+    </div>
+
+    <div class="mb-3">
+      <label for="frecuencia" class="form-label">Frecuencia</label>
+      <select class="form-select" name="frecuencia" id="frecuencia" required>
+        <option value="diaria" {% if reunion.frecuencia == 'diaria' %}selected{% endif %}>Diaria</option>
+        <option value="semanal" {% if reunion.frecuencia == 'semanal' %}selected{% endif %}>Semanal</option>
+        <option value="mensual" {% if reunion.frecuencia == 'mensual' %}selected{% endif %}>Mensual</option>
+      </select>
+    </div>
+
+    <div class="mb-3">
+      <label for="dia_semana" class="form-label">Día de la Semana</label>
+      <select class="form-select" name="dia_semana" id="dia_semana" required>
+        {% set dias = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'] %}
+        {% for i in range(7) %}
+          <option value="{{ i }}" {% if reunion.dia_semana == i %}selected{% endif %}>{{ dias[i] }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="mb-3">
+      <label for="hora" class="form-label">Hora</label>
+      <input type="time" class="form-control" name="hora" id="hora"
+       value="{{ reunion.hora.strftime('%H:%M') if reunion.hora else '' }}" required>
+    </div>
+
+    <button type="submit" class="btn btn-primary">Guardar Cambios</button>
+    <a href="/admin/reuniones" class="btn btn-secondary ms-2">Cancelar</a>
+    <a href="{{ url_for('regenerar_qr_reunion', id_reunion=reunion.id) }}" class="btn btn-secondary ms-2">
+  ♻️ Regenerar QR
+</a>
+  </form>
+</div>
+{% endblock %}

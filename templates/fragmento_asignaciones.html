@@ -1,0 +1,54 @@
+<div class="card">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <strong>Asignaciones de la reunión: {{ reunion.titulo }}</strong>
+    <a
+      href="{{ url_for('agregar_asignacion', id_reunion=reunion.id) }}"
+      class="btn btn-sm btn-success"
+    >
+      ➕ Agregar
+    </a>
+  </div>
+  <div class="card-body p-0">
+    <table class="table table-sm table-hover mb-0">
+      <thead>
+        <tr>
+          <th>DNI</th>
+          <th>Nombre</th>
+          <th>Sector</th>
+          <th class="text-center">Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for asignacion in asignaciones %}
+        <tr>
+          <td>{{ asignacion.dni }}</td>
+          <td>{{ asignacion.nombre }}</td>
+          <td>{{ asignacion.sector }}</td>
+          <td class="text-center d-flex justify-content-center gap-2">
+            <a
+              href="{{ url_for('toggle_obligatorio', id_asignacion=asignacion.id) }}"
+              class="btn btn-sm {{ 'btn-success' if asignacion.obligatorio else 'btn-secondary' }}"
+              title="{{ 'Obligatoria' if asignacion.obligatorio else 'Opcional' }}"
+            >
+              {{ '✔️' if asignacion.obligatorio else '❌' }}
+            </a>
+
+            <form
+              method="POST"
+              action="{{ url_for('eliminar_asignacion', id_reunion=reunion.id, id_asignacion=asignacion.id) }}"
+              onsubmit="return confirm('¿Eliminar esta asignación?')"
+              style="display: inline"
+            >
+              <button class="btn btn-sm btn-danger">🗑️</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %} {% if asignaciones|length == 0 %}
+        <tr>
+          <td colspan="4" class="text-center text-muted">Sin asignaciones.</td>
+        </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>

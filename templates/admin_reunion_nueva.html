@@ -1,0 +1,45 @@
+{% extends 'base.html' %}
+
+{% block title %}Nueva Reunión{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+  <h2>➕ Crear Nueva Reunión</h2>
+  <form method="POST" action="/admin/reuniones/nueva" class="mt-3">
+
+    <div class="mb-3">
+      <label for="titulo" class="form-label">Título</label>
+      <input type="text" class="form-control" name="titulo" id="titulo" required>
+    </div>
+
+    <div class="mb-3">
+      <label for="frecuencia" class="form-label">Frecuencia</label>
+      <select class="form-select" name="frecuencia" id="frecuencia" required>
+        <option value="diaria">Diaria</option>
+        <option value="semanal">Semanal</option>
+        <option value="mensual">Mensual</option>
+      </select>
+    </div>
+
+    <div class="mb-3">
+      <label for="dia_semana" class="form-label">Día de la Semana</label>
+      <select class="form-select" name="dia_semana" id="dia_semana" required>
+        <option value="0">Lunes</option>
+        <option value="1">Martes</option>
+        <option value="2">Miércoles</option>
+        <option value="3">Jueves</option>
+        <option value="4">Viernes</option>
+        <option value="5">Sábado</option>
+      </select>
+    </div>
+
+    <div class="mb-3">
+      <label for="hora" class="form-label">Hora</label>
+      <input type="time" class="form-control" name="hora" id="hora" required>
+    </div>
+
+    <button type="submit" class="btn btn-primary">Crear Reunión</button>
+    <a href="/admin/reuniones" class="btn btn-secondary ms-2">Cancelar</a>
+  </form>
+</div>
+{% endblock %}

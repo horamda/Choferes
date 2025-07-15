@@ -1,0 +1,98 @@
+{% extends 'base.html' %}
+
+{% block title %}Reuniones Programadas{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="mb-0">📅 Reuniones Activas</h2>
+    <a href="/admin/reuniones/nueva" class="btn btn-success">➕ Nueva Reunión</a>
+  </div>
+
+  <table class="table table-striped table-bordered align-middle text-center">
+    <thead class="table-dark">
+      <tr>
+        <th>ID</th>
+        <th>Título</th>
+        <th>Frecuencia</th>
+        <th>Día</th>
+        <th>Hora</th>
+        <th>QR</th>
+        <th>Acciones</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for reunion in reuniones %}
+      <tr>
+        <td>{{ reunion.id }}</td>
+        <td>{{ reunion.titulo }}</td>
+        <td>{{ reunion.frecuencia }}</td>
+        <td>
+          {% set dias = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'] %}
+          {{ dias[reunion.dia_semana] }}
+        </td>
+        <td>
+          {{ ("%02d:%02d"|format(reunion.hora.seconds // 3600, (reunion.hora.seconds // 60) % 60)) }}
+        </td>
+        <td>
+          {% if reunion.qr_code %}
+          <a href="/{{ reunion.qr_code }}" target="_blank">
+            <img src="{{ url_for('static', filename=reunion.qr_code) }}" alt="QR" style="height:60px">
+          </a>
+          {% else %}-{% endif %}
+        </td>
+        <td>
+          <div class="d-grid gap-1">
+            <a href="/admin/reuniones/{{ reunion.id }}/editar" class="btn btn-sm btn-warning">✏️ Editar</a>
+            <a href="/admin/reuniones/{{ reunion.id }}/eliminar" class="btn btn-sm btn-danger"
+              onclick="return confirm('¿Seguro que querés desactivar esta reunión?')">🗑️ Eliminar</a>
+            <button class="btn btn-sm btn-primary"
+                    onclick="toggleAsignaciones({{ reunion.id }}, '{{ reunion.titulo }}')"
+                    title="Ver asignaciones para esta reunión">
+              👥 Asignaciones ({{ reunion.cantidad_asignados or 0 }})
+            </button>
+          </div>
+        </td>
+      </tr>
+      <tr>
+        <td colspan="7">
+          <div id="asignaciones-reunion-{{ reunion.id }}" class="mt-2" style="display: none;"></div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<script>
+function toggleAsignaciones(idReunion, titulo) {
+  const divAsignaciones = document.getElementById(`asignaciones-reunion-${idReunion}`);
+
+  if (divAsignaciones.style.display === 'block') {
+    divAsignaciones.style.display = 'none';
+    divAsignaciones.innerHTML = '';
+    return;
+  }
+
+  divAsignaciones.style.display = 'block';
+  divAsignaciones.innerHTML = `
+    <div class="text-center mt-3">
+      <div class="spinner-border text-primary" role="status"></div>
+      <p class="mt-2">Cargando asignaciones de "${titulo}"...</p>
+    </div>
+  `;
+
+  fetch(`/admin/reuniones/${idReunion}/asignaciones_parcial`)
+    .then(response => {
+      if (!response.ok) throw new Error("Error al cargar asignaciones");
+      return response.text();
+    })
+    .then(html => {
+      divAsignaciones.innerHTML = html;
+    })
+    .catch(error => {
+      divAsignaciones.innerHTML = `<div class="alert alert-danger mt-3">❌ Error al obtener asignaciones: ${error.message}</div>`;
+    });
+}
+</script>
+{% endblock %}

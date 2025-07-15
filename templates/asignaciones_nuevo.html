@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+
+{% block title %}Asignar choferes{% endblock %}
+{% block header %}👥 Asignar choferes a la reunión: {{ reunion.titulo }}{% endblock %}
+
+{% block content %}
+<form method="POST" action="{{ url_for('guardar_asignacion', id_reunion=reunion.id) }}">
+    <div class="mb-3">
+        <label for="dni_chofer" class="form-label">Seleccionar chofer</label>
+        <select class="form-select" name="dni_chofer" id="dni_chofer" required>
+            <option value="" disabled selected>-- Seleccione un chofer --</option>
+            {% for chofer in choferes %}
+                <option value="{{ chofer.dni }}">{{ chofer.nombre }} ({{ chofer.sector }})</option>
+            {% endfor %}
+        </select>
+    </div>
+    <button type="submit" class="btn btn-primary">Asignar</button>
+    <a href="{{ url_for('admin_reuniones') }}" class="btn btn-secondary">Cancelar</a>
+</form>
+{% endblock %}
