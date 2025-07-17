@@ -9,3 +9,5 @@ PyJWT==2.9.0
 Pillow>=10.0.0
 qrcode[pil]
 geopy
+pandas
+openpyxl>=3.1.2

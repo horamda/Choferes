@@ -1,20 +1,452 @@
-{% extends "base.html" %}
-
-{% block title %}Asignar choferes{% endblock %}
-{% block header %}👥 Asignar choferes a la reunión: {{ reunion.titulo }}{% endblock %}
+{% extends 'base.html' %}
+{% block title %}Nueva Asignación{% endblock %}
 
 {% block content %}
-<form method="POST" action="{{ url_for('guardar_asignacion', id_reunion=reunion.id) }}">
-    <div class="mb-3">
-        <label for="dni_chofer" class="form-label">Seleccionar chofer</label>
-        <select class="form-select" name="dni_chofer" id="dni_chofer" required>
-            <option value="" disabled selected>-- Seleccione un chofer --</option>
-            {% for chofer in choferes %}
-                <option value="{{ chofer.dni }}">{{ chofer.nombre }} ({{ chofer.sector }})</option>
-            {% endfor %}
-        </select>
+<div class="container-fluid px-3 px-md-4 py-4">
+  <div class="row justify-content-center">
+    <div class="col-12 col-md-10 col-lg-8 col-xl-6">
+      
+      <!-- Header Section -->
+      <div class="d-flex align-items-center mb-4">
+        <div class="bg-primary bg-gradient rounded-circle d-flex align-items-center justify-content-center me-3" 
+             style="width: 48px; height: 48px;">
+          <i class="fas fa-plus text-white fs-5"></i>
+        </div>
+        <div>
+          <h1 class="h3 mb-0 text-primary-emphasis">Nueva Asignación</h1>
+          <p class="text-muted mb-0 small">Asignar chofer a reunión</p>
+        </div>
+      </div>
+
+      <!-- Main Form Card -->
+      <div class="card border-0 shadow-lg">
+        <div class="card-header bg-light-subtle border-0 py-3">
+          <div class="d-flex align-items-center">
+            <i class="fas fa-user-plus text-primary me-2"></i>
+            <h5 class="mb-0 text-primary-emphasis">Información de Asignación</h5>
+          </div>
+        </div>
+        
+        <div class="card-body p-4">
+          <form method="POST" id="assignmentForm" novalidate>
+            
+            <!-- Driver Selection -->
+            <div class="mb-4">
+              <label for="dni" class="form-label fw-semibold text-body-emphasis">
+                <i class="fas fa-user me-2 text-primary"></i>
+                Chofer
+                <span class="text-danger">*</span>
+              </label>
+              <select class="form-select form-select-lg shadow-sm" 
+                      name="dni" 
+                      id="dni" 
+                      required 
+                      aria-describedby="dniHelp">
+                <option disabled selected value="">-- Seleccione un chofer --</option>
+                {% for c in choferes %}
+                  <option value="{{ c.dni }}" data-sector="{{ c.sector }}">
+                    {{ c.nombre }} ({{ c.sector }})
+                  </option>
+                {% endfor %}
+              </select>
+              <div class="form-text" id="dniHelp">
+                <i class="fas fa-info-circle me-1"></i>
+                Selecciona el chofer que será asignado a la reunión
+              </div>
+              <div class="invalid-feedback">
+                Por favor seleccione un chofer válido.
+              </div>
+            </div>
+
+            <!-- Meeting Selection -->
+            <div class="mb-4">
+              <label for="reunion_id" class="form-label fw-semibold text-body-emphasis">
+                <i class="fas fa-calendar-alt me-2 text-primary"></i>
+                Reunión
+                <span class="text-danger">*</span>
+              </label>
+              <select class="form-select form-select-lg shadow-sm" 
+                      name="reunion_id" 
+                      id="reunion_id" 
+                      required 
+                      aria-describedby="reunionHelp">
+                <option disabled selected value="">-- Seleccione una reunión --</option>
+                {% for r in reuniones %}
+                  <option value="{{ r.id }}" data-fecha="{{ r.fecha }}" data-hora="{{ r.hora }}">
+                    {{ r.titulo }}
+                    {% if r.fecha %} - {{ r.fecha }}{% endif %}
+                    {% if r.hora %} {{ r.hora }}{% endif %}
+                  </option>
+                {% endfor %}
+              </select>
+              <div class="form-text" id="reunionHelp">
+                <i class="fas fa-info-circle me-1"></i>
+                Selecciona la reunión para la asignación
+              </div>
+              <div class="invalid-feedback">
+                Por favor seleccione una reunión válida.
+              </div>
+            </div>
+
+            <!-- Meeting Preview Card -->
+            <div id="meetingPreview" class="alert alert-info d-none mb-4">
+              <div class="d-flex align-items-center">
+                <i class="fas fa-eye me-2"></i>
+                <div>
+                  <strong>Vista previa de la reunión:</strong>
+                  <div id="previewContent" class="mt-1"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Priority Toggle -->
+            <div class="mb-4">
+              <div class="card bg-light-subtle border-0">
+                <div class="card-body py-3">
+                  <div class="form-check form-switch d-flex align-items-center">
+                    <input class="form-check-input me-3" 
+                           type="checkbox" 
+                           value="1" 
+                           id="obligatorio" 
+                           name="obligatorio"
+                           style="transform: scale(1.2);">
+                    <div class="flex-grow-1">
+                      <label class="form-check-label fw-semibold text-body-emphasis" for="obligatorio">
+                        <i class="fas fa-exclamation-triangle me-2 text-warning"></i>
+                        Marcar como obligatoria
+                      </label>
+                      <div class="form-text mb-0">
+                        Las asignaciones obligatorias requieren confirmación del chofer
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="d-flex flex-column flex-sm-row gap-3 justify-content-between pt-3 border-top">
+              <a href="{{ url_for('asignaciones_global') }}" 
+                 class="btn btn-outline-secondary btn-lg d-flex align-items-center justify-content-center">
+                <i class="fas fa-arrow-left me-2"></i>
+                Cancelar
+              </a>
+              <button type="submit" 
+                      class="btn btn-success btn-lg d-flex align-items-center justify-content-center"
+                      id="submitBtn">
+                <i class="fas fa-save me-2"></i>
+                <span id="submitText">Guardar Asignación</span>
+                <div class="spinner-border spinner-border-sm ms-2 d-none" id="submitSpinner"></div>
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- Help Card -->
+      <div class="card border-0 bg-light-subtle mt-4">
+        <div class="card-body p-3">
+          <div class="d-flex align-items-center text-muted">
+            <i class="fas fa-lightbulb me-2"></i>
+            <small>
+              <strong>Consejo:</strong> Puedes filtrar los choferes escribiendo en el campo de selección.
+            </small>
+          </div>
+        </div>
+      </div>
     </div>
-    <button type="submit" class="btn btn-primary">Asignar</button>
-    <a href="{{ url_for('admin_reuniones') }}" class="btn btn-secondary">Cancelar</a>
-</form>
+  </div>
+</div>
+
+<!-- Toast Notifications -->
+<div class="toast-container position-fixed top-0 end-0 p-3">
+  <div id="successToast" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
+    <div class="toast-header bg-success text-white">
+      <i class="fas fa-check-circle me-2"></i>
+      <strong class="me-auto">Éxito</strong>
+      <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast"></button>
+    </div>
+    <div class="toast-body">
+      Asignación guardada correctamente.
+    </div>
+  </div>
+  
+  <div id="errorToast" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
+    <div class="toast-header bg-danger text-white">
+      <i class="fas fa-exclamation-triangle me-2"></i>
+      <strong class="me-auto">Error</strong>
+      <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast"></button>
+    </div>
+    <div class="toast-body">
+      Hubo un error al guardar la asignación.
+    </div>
+  </div>
+</div>
+
+<style>
+/* Custom CSS for enhanced UX */
+:root {
+  --bs-primary-rgb: 13, 110, 253;
+  --bs-success-rgb: 25, 135, 84;
+  --bs-info-rgb: 13, 202, 240;
+  --bs-warning-rgb: 255, 193, 7;
+  --bs-danger-rgb: 220, 53, 69;
+  --bs-light-rgb: 248, 249, 250;
+  --bs-dark-rgb: 33, 37, 41;
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bs-body-bg: #1a1a1a;
+    --bs-body-color: #ffffff;
+    --bs-emphasis-color: #ffffff;
+    --bs-secondary-color: rgba(255, 255, 255, 0.75);
+    --bs-tertiary-color: rgba(255, 255, 255, 0.5);
+    --bs-border-color: #404040;
+    --bs-light-rgb: 52, 58, 64;
+  }
+  
+  .card {
+    background-color: #2d2d2d;
+    border-color: #404040;
+  }
+  
+  .card-header {
+    background-color: #404040 !important;
+    border-color: #404040;
+  }
+  
+  .bg-light-subtle {
+    background-color: #404040 !important;
+  }
+  
+  .form-select, .form-control {
+    background-color: #2d2d2d;
+    border-color: #404040;
+    color: #ffffff;
+  }
+  
+  .form-select:focus, .form-control:focus {
+    background-color: #2d2d2d;
+    border-color: #0d6efd;
+    color: #ffffff;
+  }
+  
+  .text-muted {
+    color: rgba(255, 255, 255, 0.6) !important;
+  }
+  
+  .alert-info {
+    background-color: #1a2332;
+    border-color: #0dcaf0;
+    color: #b3e5fc;
+  }
+}
+
+/* Enhanced form styling */
+.form-select, .form-control {
+  transition: all 0.3s ease;
+  border-radius: 0.5rem;
+}
+
+.form-select:focus, .form-control:focus {
+  transform: translateY(-2px);
+  box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+}
+
+.btn {
+  transition: all 0.3s ease;
+  border-radius: 0.5rem;
+  font-weight: 500;
+}
+
+.btn:hover {
+  transform: translateY(-2px);
+}
+
+.card {
+  transition: all 0.3s ease;
+  border-radius: 1rem;
+}
+
+.card:hover {
+  transform: translateY(-2px);
+}
+
+/* Animation for form validation */
+.was-validated .form-select:invalid,
+.was-validated .form-control:invalid {
+  border-color: #dc3545;
+  animation: shake 0.5s ease-in-out;
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-5px); }
+  75% { transform: translateX(5px); }
+}
+
+/* Loading state */
+.loading {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+/* Responsive improvements */
+@media (max-width: 576px) {
+  .container-fluid {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+  
+  .card-body {
+    padding: 1.5rem;
+  }
+  
+  .btn-lg {
+    padding: 0.75rem 1.5rem;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+@media (prefers-color-scheme: dark) {
+  ::-webkit-scrollbar-track {
+    background: #2d2d2d;
+  }
+  
+  ::-webkit-scrollbar-thumb {
+    background: #555;
+  }
+  
+  ::-webkit-scrollbar-thumb:hover {
+    background: #777;
+  }
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const form = document.getElementById('assignmentForm');
+  const submitBtn = document.getElementById('submitBtn');
+  const submitText = document.getElementById('submitText');
+  const submitSpinner = document.getElementById('submitSpinner');
+  const reunionSelect = document.getElementById('reunion_id');
+  const meetingPreview = document.getElementById('meetingPreview');
+  const previewContent = document.getElementById('previewContent');
+  
+  // Form validation
+  form.addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    if (form.checkValidity()) {
+      // Show loading state
+      submitBtn.disabled = true;
+      submitText.textContent = 'Guardando...';
+      submitSpinner.classList.remove('d-none');
+      
+      // Simulate form submission (replace with actual form submission)
+      setTimeout(() => {
+        form.submit();
+      }, 500);
+    } else {
+      form.classList.add('was-validated');
+      
+      // Show error toast
+      const errorToast = new bootstrap.Toast(document.getElementById('errorToast'));
+      errorToast.show();
+    }
+  });
+  
+  // Meeting preview
+  reunionSelect.addEventListener('change', function() {
+    const selectedOption = this.options[this.selectedIndex];
+    
+    if (selectedOption.value) {
+      const titulo = selectedOption.textContent.trim();
+      const fecha = selectedOption.dataset.fecha || '';
+      const hora = selectedOption.dataset.hora || '';
+      
+      let previewText = `<strong>${titulo}</strong>`;
+      if (fecha) previewText += `<br><small class="text-muted"><i class="fas fa-calendar me-1"></i>${fecha}</small>`;
+      if (hora) previewText += `<small class="text-muted"><i class="fas fa-clock me-1 ms-2"></i>${hora}</small>`;
+      
+      previewContent.innerHTML = previewText;
+      meetingPreview.classList.remove('d-none');
+    } else {
+      meetingPreview.classList.add('d-none');
+    }
+  });
+  
+  // Enhanced select styling
+  const selects = document.querySelectorAll('.form-select');
+  selects.forEach(select => {
+    select.addEventListener('focus', function() {
+      this.parentElement.classList.add('focused');
+    });
+    
+    select.addEventListener('blur', function() {
+      this.parentElement.classList.remove('focused');
+    });
+  });
+  
+  // Auto-resize for mobile
+  function adjustForMobile() {
+    if (window.innerWidth <= 576) {
+      document.body.classList.add('mobile-view');
+    } else {
+      document.body.classList.remove('mobile-view');
+    }
+  }
+  
+  adjustForMobile();
+  window.addEventListener('resize', adjustForMobile);
+  
+  // Dark mode toggle (if you want to add manual toggle)
+  const darkModeToggle = document.getElementById('darkModeToggle');
+  if (darkModeToggle) {
+    darkModeToggle.addEventListener('click', function() {
+      document.body.classList.toggle('dark-mode');
+      localStorage.setItem('darkMode', document.body.classList.contains('dark-mode'));
+    });
+    
+    // Load saved dark mode preference
+    if (localStorage.getItem('darkMode') === 'true') {
+      document.body.classList.add('dark-mode');
+    }
+  }
+  
+  // Keyboard shortcuts
+  document.addEventListener('keydown', function(e) {
+    // Ctrl/Cmd + S to save
+    if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+      e.preventDefault();
+      submitBtn.click();
+    }
+    
+    // Escape to cancel
+    if (e.key === 'Escape') {
+      window.location.href = "{{ url_for('asignaciones_global') }}";
+    }
+  });
+});
+</script>
 {% endblock %}
+

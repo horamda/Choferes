@@ -18,8 +18,8 @@ from utils import redimensionar_imagen
 import qrcode
 from geopy.distance import geodesic
 from PIL import Image
-
-
+import pandas as pd
+from flask import send_file
 
 
 
@@ -2294,27 +2294,6 @@ def regenerar_qr_reunion(id_reunion):
     except Exception as e:
         return f"❌ Error al regenerar QR: {e}"
 
-@app.route("/admin/reuniones/<int:id_reunion>/asignaciones")
-def listar_asignaciones(id_reunion):
-    conn = get_connection()
-    cursor = conn.cursor(dictionary=True)
-
-    # Info de la reunión
-    cursor.execute("SELECT * FROM reuniones WHERE id = %s", (id_reunion,))
-    reunion = cursor.fetchone()
-
-    # Asignaciones
-    cursor.execute("""
-        SELECT ar.id, ar.dni_chofer, c.nombre, c.sector, ar.obligatorio
-        FROM asignaciones_reuniones ar
-        JOIN choferes c ON ar.dni_chofer = c.dni
-        WHERE ar.id_reunion = %s
-    """, (id_reunion,))
-    asignaciones = cursor.fetchall()
-
-    cursor.close()
-    conn.close()
-    return render_template("asignaciones_listar.html", reunion=reunion, asignaciones=asignaciones)
 
 @app.route("/admin/reuniones/<int:id_reunion>/asignaciones/nuevo", methods=["GET"])
 def agregar_asignacion(id_reunion):
@@ -2543,6 +2522,7 @@ def obtener_asignaciones(id_reunion):
     cursor.close()
     conn.close()
     return asignaciones
+
 def obtener_reuniones_con_asignaciones():
     conn = get_connection()
     cursor = conn.cursor(dictionary=True)
@@ -2558,14 +2538,197 @@ def obtener_reuniones_con_asignaciones():
     cursor.close()
     conn.close()
     return reuniones
-def obtener_reunion(id):
+
+
+
+@app.route("/admin/asignaciones")
+def asignaciones_global():
+    sector = request.args.get("sector")
+    reunion_id = request.args.get("reunion_id")
+    exportar = request.args.get("exportar")
+
     conn = get_connection()
     cursor = conn.cursor(dictionary=True)
-    cursor.execute("SELECT * FROM reuniones WHERE id = %s", (id,))
-    reunion = cursor.fetchone()
+
+    query = """
+        SELECT ar.id, ar.dni_chofer, ar.obligatorio, 
+               c.nombre, c.sector, r.titulo AS reunion
+        FROM asignaciones_reuniones ar
+        JOIN choferes c ON ar.dni_chofer = c.dni
+        LEFT JOIN reuniones r ON ar.id_reunion = r.id
+        WHERE 1=1
+    """
+    params = []
+
+    if sector:
+        query += " AND c.sector = %s"
+        params.append(sector)
+
+    if reunion_id:
+        query += " AND r.id = %s"
+        params.append(reunion_id)
+
+    query += " ORDER BY ar.id DESC"
+    cursor.execute(query, tuple(params))
+    asignaciones = cursor.fetchall()
+
+    # Si el usuario solicitó exportar
+    if exportar == "excel":
+       
+        from io import BytesIO
+
+        df = pd.DataFrame(asignaciones)
+        df.rename(columns={
+            "dni_chofer": "DNI",
+            "nombre": "Nombre",
+            "sector": "Sector",
+            "reunion": "Reunión",
+            "obligatorio": "Obligatoria"
+        }, inplace=True)
+
+        # Convertir booleanos a texto
+        df["Obligatoria"] = df["Obligatoria"].map({1: "Sí", 0: "No"})
+
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine="openpyxl") as writer:
+            df.to_excel(writer, index=False, sheet_name="Asignaciones")
+        output.seek(0)
+        return send_file(output, download_name="asignaciones_globales.xlsx", as_attachment=True)
+
+    # Selects de filtros
+    cursor.execute("SELECT DISTINCT sector FROM choferes")
+    sectores = [row["sector"] for row in cursor.fetchall()]
+
+    cursor.execute("SELECT id, titulo FROM reuniones WHERE activa = TRUE")
+    reuniones = cursor.fetchall()
+
     cursor.close()
     conn.close()
-    return reunion
+
+    return render_template(
+        "asignaciones_global.html",
+        asignaciones=asignaciones,
+        sectores=sectores,
+        reuniones=reuniones,
+        filtro_sector=sector,
+        filtro_reunion=reunion_id,
+    )
+
+from utils import db_cursor
+@app.route("/admin/asignaciones/nueva", methods=["GET", "POST"])
+def asignacion_nueva():
+    next_view = None
+    with db_cursor() as (conn, cursor):
+        if request.method == "POST":
+            dni = request.form["dni"]
+            reunion_id = request.form["reunion_id"]
+            obligatorio = int("obligatorio" in request.form)
+
+            cursor.execute("""
+                SELECT id FROM asignaciones_reuniones 
+                WHERE dni_chofer = %s AND id_reunion = %s
+            """, (dni, reunion_id))
+            existente = cursor.fetchone()
+
+            if existente:
+                flash("⚠️ Ya existe esta asignación", "warning")
+                next_view = "asignacion_nueva"
+
+            else:
+                cursor.execute("""
+                    INSERT INTO asignaciones_reuniones (dni_chofer, id_reunion, obligatorio)
+                    VALUES (%s, %s, %s)
+                """, (dni, reunion_id, obligatorio))
+                flash("✅ Asignación creada correctamente", "success")
+                next_view = "asignaciones_global"
+
+        cursor.execute("SELECT dni, nombre, sector FROM choferes")
+        choferes = cursor.fetchall()
+
+        cursor.execute("SELECT id, titulo FROM reuniones WHERE activa = TRUE")
+        reuniones = cursor.fetchall()
+
+    if next_view:
+        return redirect(url_for(next_view))
+
+    return render_template("asignaciones_nuevo.html", choferes=choferes, reuniones=reuniones)
+
+
+
+@app.route("/admin/asignaciones/<int:id_asignacion>/editar", methods=["GET", "POST"])
+def asignacion_editar(id_asignacion):
+    next_view = None
+    with db_cursor() as (conn, cursor):
+        # Obtener la asignación
+        cursor.execute("""
+            SELECT ar.id, ar.dni_chofer, ar.id_reunion, ar.obligatorio
+            FROM asignaciones_reuniones ar
+            WHERE ar.id = %s
+        """, (id_asignacion,))
+        asignacion = cursor.fetchone()
+
+        if not asignacion:
+            flash("❌ Asignación no encontrada", "danger")
+            next_view = "asignaciones_global"
+        else:
+            if request.method == "POST":
+                dni = request.form["dni"]
+                reunion_id = request.form["reunion_id"]
+                obligatorio = int("obligatorio" in request.form)
+
+                cursor.execute("""
+                    SELECT id FROM asignaciones_reuniones
+                    WHERE dni_chofer = %s AND id_reunion = %s AND id != %s
+                """, (dni, reunion_id, id_asignacion))
+                duplicado = cursor.fetchone()
+
+                if duplicado:
+                    flash("⚠️ Ya existe otra asignación con ese chofer y reunión.", "warning")
+                    next_view = "asignacion_editar"
+                else:
+                    cursor.execute("""
+                        UPDATE asignaciones_reuniones
+                        SET dni_chofer = %s, id_reunion = %s, obligatorio = %s
+                        WHERE id = %s
+                    """, (dni, reunion_id, obligatorio, id_asignacion))
+                    flash("✅ Asignación actualizada correctamente", "success")
+                    next_view = "asignaciones_global"
+
+        # Solo para mostrar el formulario si no se hizo POST con redirect
+        cursor.execute("SELECT dni, nombre, sector FROM choferes")
+        choferes = cursor.fetchall()
+
+        cursor.execute("SELECT id, titulo FROM reuniones WHERE activa = TRUE")
+        reuniones = cursor.fetchall()
+
+    if next_view == "asignacion_editar":
+        return redirect(url_for("asignacion_editar", id_asignacion=id_asignacion))
+    elif next_view:
+        return redirect(url_for(next_view))
+
+    return render_template("asignaciones_editar.html",
+                           asignacion=asignacion,
+                           choferes=choferes,
+                           reuniones=reuniones)
+
+
+
+@app.route("/admin/asignaciones/<int:id_asignacion>/eliminar", methods=["POST"])
+def asignacion_eliminar(id_asignacion):
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("DELETE FROM asignaciones_reuniones WHERE id = %s", (id_asignacion,))
+    conn.commit()
+
+    cursor.close()
+    conn.close()
+
+    flash("🗑️ Asignación eliminada correctamente", "success")
+    return redirect(url_for("asignaciones_global"))    
+
+
+
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)

@@ -1123,6 +1123,16 @@
           </a>
         </div>
 
+            <div class="nav-item">
+      <a
+        href="{{ url_for('asignaciones_global') }}"
+        class="nav-link {% if request.path.startswith('/admin/asignaciones') %}active{% endif %}"
+      >
+        <i class="bi bi-people-fill"></i>
+        Asignaciones
+      </a>
+    </div>
+
         <div class="nav-item" style="margin-top: 20px">
           <a href="{{ url_for('logout') }}" class="nav-link">
             <i class="bi bi-box-arrow-right"></i>

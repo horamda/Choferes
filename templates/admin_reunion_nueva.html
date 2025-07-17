@@ -2,44 +2,412 @@
 
 {% block title %}Nueva Reunión{% endblock %}
 
+{% block extra_css %}
+<style>
+  /* Variables CSS para temas */
+  :root {
+    --bs-primary: #007bff;
+    --bs-secondary: #6c757d;
+    --bs-success: #28a745;
+    --bs-danger: #dc3545;
+    --bs-warning: #ffc107;
+    --bs-info: #17a2b8;
+    --bs-light: #f8f9fa;
+    --bs-dark: #343a40;
+    --bs-body-bg: #ffffff;
+    --bs-body-color: #212529;
+    --bs-border-color: #dee2e6;
+    --bs-form-control-bg: #ffffff;
+    --bs-form-control-border-color: #ced4da;
+  }
+
+  [data-theme="dark"] {
+    --bs-body-bg: #121212;
+    --bs-body-color: #ffffff;
+    --bs-border-color: #495057;
+    --bs-form-control-bg: #2d2d2d;
+    --bs-form-control-border-color: #495057;
+    --bs-light: #343a40;
+    --bs-dark: #f8f9fa;
+  }
+
+  body {
+    background-color: var(--bs-body-bg) !important;
+    color: var(--bs-body-color) !important;
+    transition: background-color 0.3s ease, color 0.3s ease;
+  }
+
+  .container {
+    background-color: var(--bs-body-bg);
+  }
+
+  .form-control, .form-select {
+    background-color: var(--bs-form-control-bg) !important;
+    border-color: var(--bs-form-control-border-color) !important;
+    color: var(--bs-body-color) !important;
+    transition: all 0.3s ease;
+  }
+
+  .form-control:focus, .form-select:focus {
+    background-color: var(--bs-form-control-bg) !important;
+    border-color: var(--bs-primary) !important;
+    color: var(--bs-body-color) !important;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+  }
+
+  .form-label {
+    color: var(--bs-body-color) !important;
+  }
+
+  h2 {
+    color: var(--bs-body-color) !important;
+  }
+
+  .theme-toggle {
+    background: none;
+    border: 1px solid var(--bs-border-color);
+    color: var(--bs-body-color);
+    padding: 0.375rem 0.75rem;
+    border-radius: 0.375rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-size: 0.875rem;
+    margin-left: auto;
+  }
+
+  .theme-toggle:hover {
+    background-color: var(--bs-primary);
+    border-color: var(--bs-primary);
+    color: white;
+  }
+
+  .header-container {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+  }
+
+  .btn-primary {
+    background-color: var(--bs-primary);
+    border-color: var(--bs-primary);
+  }
+
+  .btn-primary:hover {
+    background-color: #0056b3;
+    border-color: #0056b3;
+  }
+
+  .btn-secondary {
+    background-color: var(--bs-secondary);
+    border-color: var(--bs-secondary);
+  }
+
+  .btn-secondary:hover {
+    background-color: #545b62;
+    border-color: #545b62;
+  }
+
+  .loading {
+    opacity: 0.7;
+    pointer-events: none;
+  }
+
+  .spinner-border-sm {
+    width: 1rem;
+    height: 1rem;
+  }
+
+  .alert {
+    border-radius: 0.375rem;
+  }
+
+  .alert-info {
+    background-color: rgba(23, 162, 184, 0.1);
+    border-color: var(--bs-info);
+    color: var(--bs-info);
+  }
+
+  [data-theme="dark"] .alert-info {
+    background-color: rgba(23, 162, 184, 0.2);
+  }
+
+  .frequency-info {
+    margin-top: 0.5rem;
+    display: none;
+  }
+
+  /* Responsividad */
+  @media (max-width: 768px) {
+    .header-container {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 1rem;
+    }
+
+    .theme-toggle {
+      margin-left: 0;
+    }
+
+    .btn {
+      width: 100%;
+      margin-bottom: 0.5rem;
+    }
+
+    .ms-2 {
+      margin-left: 0 !important;
+    }
+  }
+
+  /* Validación visual */
+  .is-invalid {
+    border-color: var(--bs-danger) !important;
+  }
+
+  .is-valid {
+    border-color: var(--bs-success) !important;
+  }
+
+  .invalid-feedback {
+    display: block;
+    width: 100%;
+    margin-top: 0.25rem;
+    font-size: 0.875em;
+    color: var(--bs-danger);
+  }
+
+  .valid-feedback {
+    display: block;
+    width: 100%;
+    margin-top: 0.25rem;
+    font-size: 0.875em;
+    color: var(--bs-success);
+  }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="container mt-4">
-  <h2>➕ Crear Nueva Reunión</h2>
-  <form method="POST" action="/admin/reuniones/nueva" class="mt-3">
+  <div class="header-container">
+    <h2>➕ Crear Nueva Reunión</h2>
+   
+  </div>
 
+  <form method="POST" action="/admin/reuniones/nueva" class="mt-3" id="meetingForm" novalidate>
     <div class="mb-3">
       <label for="titulo" class="form-label">Título</label>
-      <input type="text" class="form-control" name="titulo" id="titulo" required>
+      <input 
+        type="text" 
+        class="form-control" 
+        name="titulo" 
+        id="titulo" 
+        placeholder="Ej: Reunión semanal del equipo"
+        required
+        maxlength="100"
+        value="{{ form_data.titulo if form_data else '' }}"
+      >
+      <div class="invalid-feedback"></div>
     </div>
 
     <div class="mb-3">
       <label for="frecuencia" class="form-label">Frecuencia</label>
       <select class="form-select" name="frecuencia" id="frecuencia" required>
-        <option value="diaria">Diaria</option>
-        <option value="semanal">Semanal</option>
-        <option value="mensual">Mensual</option>
+        <option value="">Seleccionar frecuencia</option>
+        <option value="diaria" {{ 'selected' if form_data and form_data.frecuencia == 'diaria' else '' }}>Diaria</option>
+        <option value="semanal" {{ 'selected' if form_data and form_data.frecuencia == 'semanal' else '' }}>Semanal</option>
+        <option value="mensual" {{ 'selected' if form_data and form_data.frecuencia == 'mensual' else '' }}>Mensual</option>
       </select>
+      <div class="invalid-feedback"></div>
+      <div class="alert alert-info frequency-info" id="frequencyInfo">
+        <strong>ℹ️ Información:</strong> <span id="frequencyText"></span>
+      </div>
     </div>
 
     <div class="mb-3">
       <label for="dia_semana" class="form-label">Día de la Semana</label>
       <select class="form-select" name="dia_semana" id="dia_semana" required>
-        <option value="0">Lunes</option>
-        <option value="1">Martes</option>
-        <option value="2">Miércoles</option>
-        <option value="3">Jueves</option>
-        <option value="4">Viernes</option>
-        <option value="5">Sábado</option>
+        <option value="">Seleccionar día</option>
+        <option value="0" {{ 'selected' if form_data and form_data.dia_semana == '0' else '' }}>Lunes</option>
+        <option value="1" {{ 'selected' if form_data and form_data.dia_semana == '1' else '' }}>Martes</option>
+        <option value="2" {{ 'selected' if form_data and form_data.dia_semana == '2' else '' }}>Miércoles</option>
+        <option value="3" {{ 'selected' if form_data and form_data.dia_semana == '3' else '' }}>Jueves</option>
+        <option value="4" {{ 'selected' if form_data and form_data.dia_semana == '4' else '' }}>Viernes</option>
+        <option value="5" {{ 'selected' if form_data and form_data.dia_semana == '5' else '' }}>Sábado</option>
+        <option value="6" {{ 'selected' if form_data and form_data.dia_semana == '6' else '' }}>Domingo</option>
       </select>
+      <div class="invalid-feedback"></div>
     </div>
 
     <div class="mb-3">
       <label for="hora" class="form-label">Hora</label>
-      <input type="time" class="form-control" name="hora" id="hora" required>
+      <input 
+        type="time" 
+        class="form-control" 
+        name="hora" 
+        id="hora" 
+        required
+        value="{{ form_data.hora if form_data else '' }}"
+      >
+      <div class="invalid-feedback"></div>
     </div>
 
-    <button type="submit" class="btn btn-primary">Crear Reunión</button>
+    <button type="submit" class="btn btn-primary" id="submitBtn">
+      Crear Reunión
+    </button>
     <a href="/admin/reuniones" class="btn btn-secondary ms-2">Cancelar</a>
   </form>
 </div>
+
+<script>
+// Función para alternar tema
+function toggleTheme() {
+  const html = document.documentElement;
+  const currentTheme = html.getAttribute('data-theme') || 'light';
+  const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+  
+  html.setAttribute('data-theme', newTheme);
+  localStorage.setItem('theme', newTheme);
+  
+  updateThemeButton(newTheme);
+}
+
+// Actualizar botón de tema
+function updateThemeButton(theme) {
+  const icon = document.getElementById('theme-icon');
+  const text = document.getElementById('theme-text');
+  
+  if (theme === 'dark') {
+    icon.textContent = '☀️';
+    text.textContent = 'Modo Claro';
+  } else {
+    icon.textContent = '🌙';
+    text.textContent = 'Modo Oscuro';
+  }
+}
+
+// Inicializar tema al cargar la página
+document.addEventListener('DOMContentLoaded', function() {
+  const savedTheme = localStorage.getItem('theme') || 'light';
+  document.documentElement.setAttribute('data-theme', savedTheme);
+  updateThemeButton(savedTheme);
+});
+
+// Validación del formulario
+document.getElementById('meetingForm').addEventListener('submit', function(e) {
+  e.preventDefault();
+  
+  const form = this;
+  const submitBtn = document.getElementById('submitBtn');
+  let isValid = true;
+  
+  // Limpiar validaciones anteriores
+  form.querySelectorAll('.is-invalid').forEach(el => el.classList.remove('is-invalid'));
+  form.querySelectorAll('.is-valid').forEach(el => el.classList.remove('is-valid'));
+  
+  // Validar título
+  const titulo = document.getElementById('titulo');
+  if (!titulo.value.trim()) {
+    showError(titulo, 'El título es requerido');
+    isValid = false;
+  } else if (titulo.value.trim().length < 3) {
+    showError(titulo, 'El título debe tener al menos 3 caracteres');
+    isValid = false;
+  } else {
+    showSuccess(titulo);
+  }
+  
+  // Validar frecuencia
+  const frecuencia = document.getElementById('frecuencia');
+  if (!frecuencia.value) {
+    showError(frecuencia, 'Seleccione una frecuencia');
+    isValid = false;
+  } else {
+    showSuccess(frecuencia);
+  }
+  
+  // Validar día de la semana
+  const diaSemana = document.getElementById('dia_semana');
+  if (!diaSemana.value && diaSemana.value !== '0') {
+    showError(diaSemana, 'Seleccione un día de la semana');
+    isValid = false;
+  } else {
+    showSuccess(diaSemana);
+  }
+  
+  // Validar hora
+  const hora = document.getElementById('hora');
+  if (!hora.value) {
+    showError(hora, 'Seleccione una hora');
+    isValid = false;
+  } else {
+    showSuccess(hora);
+  }
+  
+  if (isValid) {
+    // Mostrar loading
+    submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Creando...';
+    submitBtn.disabled = true;
+    form.classList.add('loading');
+    
+    // Enviar formulario
+    form.submit();
+  }
+});
+
+// Información de frecuencia
+document.getElementById('frecuencia').addEventListener('change', function() {
+  const frequencyInfo = document.getElementById('frequencyInfo');
+  const frequencyText = document.getElementById('frequencyText');
+  
+  const infoTexts = {
+    'diaria': 'Esta reunión se repetirá todos los días a la hora especificada.',
+    'semanal': 'Esta reunión se repetirá cada semana en el día y hora especificados.',
+    'mensual': 'Esta reunión se repetirá cada mes en el día de la semana y hora especificados.'
+  };
+  
+  if (this.value && infoTexts[this.value]) {
+    frequencyText.textContent = infoTexts[this.value];
+    frequencyInfo.style.display = 'block';
+  } else {
+    frequencyInfo.style.display = 'none';
+  }
+});
+
+// Funciones de validación
+function showError(element, message) {
+  element.classList.add('is-invalid');
+  element.classList.remove('is-valid');
+  const feedback = element.parentNode.querySelector('.invalid-feedback');
+  if (feedback) {
+    feedback.textContent = message;
+  }
+}
+
+function showSuccess(element) {
+  element.classList.add('is-valid');
+  element.classList.remove('is-invalid');
+}
+
+// Limpiar validación al escribir
+document.querySelectorAll('input, select').forEach(element => {
+  element.addEventListener('input', function() {
+    if (this.classList.contains('is-invalid')) {
+      this.classList.remove('is-invalid');
+    }
+  });
+});
+
+// Mostrar errores del servidor si existen
+{% if errors %}
+document.addEventListener('DOMContentLoaded', function() {
+  const errors = {{ errors|tojson }};
+  Object.keys(errors).forEach(field => {
+    const element = document.getElementById(field);
+    if (element) {
+      showError(element, errors[field]);
+    }
+  });
+});
+{% endif %}
+</script>
 {% endblock %}

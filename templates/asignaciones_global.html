@@ -1,0 +1,683 @@
+{% extends 'base.html' %}
+{% block title %}Asignaciones Globales{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-3 px-lg-4 py-4">
+  <!-- Header responsivo -->
+  <div class="row align-items-center mb-4">
+    <div class="col-12 col-lg-8">
+      <div class="d-flex align-items-center gap-2 gap-sm-3 flex-wrap">
+        <h1 class="h3 mb-0 fw-bold text-primary">
+          <i class="bi bi-clipboard-data me-1 me-sm-2"></i>
+          <span class="d-none d-sm-inline">Asignaciones Globales</span>
+          <span class="d-sm-none">Asignaciones</span>
+        </h1>
+        <span class="badge bg-secondary fs-6" id="contador-asignaciones">
+          {{ asignaciones|length }} registros
+        </span>
+      </div>
+    </div>
+    
+    <div class="col-12 col-lg-4 mt-3 mt-lg-0">
+      <div class="d-flex justify-content-end align-items-center gap-2">
+        <!-- Toggle tema -->
+        <div class="form-check form-switch mb-0">
+          <input class="form-check-input" type="checkbox" id="themeToggle">
+          <label class="form-check-label" for="themeToggle">
+            <i class="bi bi-moon-stars" id="themeIcon"></i>
+          </label>
+        </div>
+        
+        <!-- Botones de acción principales -->
+        <div class="btn-group" role="group">
+          <a href="{{ url_for('asignacion_nueva') }}" class="btn btn-success">
+            <i class="bi bi-plus-circle me-1"></i>
+            <span class="d-none d-sm-inline">Nueva</span>
+          </a>
+          <a href="{{ url_for('asignaciones_global', sector=filtro_sector, reunion_id=filtro_reunion, exportar='excel') }}"
+             class="btn btn-outline-primary">
+            <i class="bi bi-download me-1"></i>
+            <span class="d-none d-sm-inline">Excel</span>
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Filtros responsivos -->
+  <div class="card shadow-sm mb-4">
+    <div class="card-header bg-transparent border-0 pb-0">
+      <div class="d-flex align-items-center">
+        <i class="bi bi-funnel me-2 text-primary"></i>
+        <h6 class="mb-0 fw-semibold">Filtros</h6>
+      </div>
+    </div>
+    <div class="card-body">
+      <form method="GET" id="filtrosForm">
+        <div class="row g-3">
+          <div class="col-12 col-md-4">
+            <label for="sector" class="form-label fw-semibold">
+              <i class="bi bi-building me-1"></i>Sector
+            </label>
+            <select name="sector" id="sector" class="form-select">
+              <option value="">Todos los sectores</option>
+              {% for s in sectores %}
+                <option value="{{ s }}" {% if s == filtro_sector %}selected{% endif %}>{{ s }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          
+          <div class="col-12 col-md-4">
+            <label for="reunion_id" class="form-label fw-semibold">
+              <i class="bi bi-calendar-event me-1"></i>Reunión
+            </label>
+            <select name="reunion_id" id="reunion_id" class="form-select">
+              <option value="">Todas las reuniones</option>
+              {% for r in reuniones %}
+                <option value="{{ r.id }}" {% if r.id|string == filtro_reunion %}selected{% endif %}>
+                  {{ r.titulo }}
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+          
+          <div class="col-12 col-md-4">
+            <label class="form-label fw-semibold opacity-0">Acciones</label>
+            <div class="d-flex gap-2">
+              <button type="submit" class="btn btn-primary flex-fill">
+                <i class="bi bi-search me-1"></i>
+                <span class="d-none d-sm-inline">Filtrar</span>
+              </button>
+              <a href="{{ url_for('asignaciones_global') }}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-clockwise"></i>
+              </a>
+            </div>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Vista móvil (cards) -->
+  <div class="d-lg-none">
+    <div class="row g-3">
+      {% for a in asignaciones %}
+      <div class="col-12">
+        <div class="card shadow-sm asignacion-card">
+          <div class="card-body">
+            <div class="d-flex justify-content-between align-items-start mb-3">
+              <div class="d-flex align-items-center">
+                <div class="avatar-md bg-primary text-white rounded-circle d-flex align-items-center justify-content-center me-3">
+                  {{ a.nombre[:1].upper() }}
+                </div>
+                <div>
+                  <h6 class="mb-0 fw-bold">{{ a.nombre }}</h6>
+                  <small class="text-muted">DNI: {{ a.dni_chofer }}</small>
+                </div>
+              </div>
+              <div class="dropdown">
+                <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="dropdown">
+                  <i class="bi bi-three-dots-vertical"></i>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end">
+                  <li>
+                    <a class="dropdown-item" href="{{ url_for('asignacion_editar', id_asignacion=a.id) }}">
+                      <i class="bi bi-pencil me-2"></i>Editar
+                    </a>
+                  </li>
+                  <li>
+                    <button class="dropdown-item text-danger" onclick="confirmarEliminacion({{ a.id }}, '{{ a.nombre }}')">
+                      <i class="bi bi-trash me-2"></i>Eliminar
+                    </button>
+                  </li>
+                </ul>
+              </div>
+            </div>
+            
+            <div class="row g-2 mb-3">
+              <div class="col-6">
+                <div class="p-2 bg-light rounded">
+                  <small class="text-muted d-block">
+                    <i class="bi bi-building me-1"></i>Sector
+                  </small>
+                  <span class="fw-medium">{{ a.sector }}</span>
+                </div>
+              </div>
+              <div class="col-6">
+                <div class="p-2 bg-light rounded">
+                  <small class="text-muted d-block">
+                    <i class="bi bi-calendar-event me-1"></i>Reunión
+                  </small>
+                  <span class="fw-medium text-truncate d-block">{{ a.reunion }}</span>
+                </div>
+              </div>
+            </div>
+            
+            <div class="d-flex justify-content-between align-items-center">
+              <div>
+                <small class="text-muted">Obligatoria</small>
+                <div>
+                  {% if a.obligatorio %}
+                    <span class="badge bg-success-subtle text-success border border-success">
+                      <i class="bi bi-check-circle me-1"></i>Sí
+                    </span>
+                  {% else %}
+                    <span class="badge bg-secondary-subtle text-secondary border border-secondary">
+                      <i class="bi bi-x-circle me-1"></i>No
+                    </span>
+                  {% endif %}
+                </div>
+              </div>
+              <div class="btn-group btn-group-sm">
+                <a href="{{ url_for('asignacion_editar', id_asignacion=a.id) }}" 
+                   class="btn btn-outline-warning">
+                  <i class="bi bi-pencil"></i>
+                </a>
+                <button type="button" 
+                        class="btn btn-outline-danger" 
+                        onclick="confirmarEliminacion({{ a.id }}, '{{ a.nombre }}')">
+                  <i class="bi bi-trash"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- Vista desktop (tabla) -->
+  <div class="d-none d-lg-block">
+    <div class="card shadow-sm">
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-hover mb-0 align-middle">
+            <thead class="table-light">
+              <tr>
+                <th class="fw-semibold" style="width: 12%;">
+                  <i class="bi bi-person-badge me-1"></i>DNI
+                </th>
+                <th class="fw-semibold" style="width: 25%;">
+                  <i class="bi bi-person me-1"></i>Nombre
+                </th>
+                <th class="fw-semibold" style="width: 15%;">
+                  <i class="bi bi-building me-1"></i>Sector
+                </th>
+                <th class="fw-semibold" style="width: 25%;">
+                  <i class="bi bi-calendar-event me-1"></i>Reunión
+                </th>
+                <th class="fw-semibold text-center" style="width: 13%;">
+                  <i class="bi bi-exclamation-triangle me-1"></i>Obligatoria
+                </th>
+                <th class="fw-semibold text-center" style="width: 10%;">Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for a in asignaciones %}
+              <tr class="asignacion-row">
+                <td class="fw-medium">{{ a.dni_chofer }}</td>
+                <td>
+                  <div class="d-flex align-items-center">
+                    <div class="avatar-sm bg-primary text-white rounded-circle d-flex align-items-center justify-content-center me-2">
+                      {{ a.nombre[:1].upper() }}
+                    </div>
+                    <div class="fw-medium">{{ a.nombre }}</div>
+                  </div>
+                </td>
+                <td>
+                  <span class="badge bg-light text-dark border">{{ a.sector }}</span>
+                </td>
+                <td>
+                  <span class="text-muted">{{ a.reunion }}</span>
+                </td>
+                <td class="text-center">
+                  {% if a.obligatorio %}
+                    <span class="badge bg-success-subtle text-success border border-success">
+                      <i class="bi bi-check-circle me-1"></i>Sí
+                    </span>
+                  {% else %}
+                    <span class="badge bg-secondary-subtle text-secondary border border-secondary">
+                      <i class="bi bi-x-circle me-1"></i>No
+                    </span>
+                  {% endif %}
+                </td>
+                <td class="text-center">
+                  <div class="btn-group btn-group-sm" role="group">
+                    <a href="{{ url_for('asignacion_editar', id_asignacion=a.id) }}" 
+                       class="btn btn-outline-warning" 
+                       title="Editar asignación">
+                      <i class="bi bi-pencil"></i>
+                    </a>
+                    <button type="button" 
+                            class="btn btn-outline-danger" 
+                            onclick="confirmarEliminacion({{ a.id }}, '{{ a.nombre }}')"
+                            title="Eliminar asignación">
+                      <i class="bi bi-trash"></i>
+                    </button>
+                  </div>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Estado vacío responsivo -->
+  {% if not asignaciones %}
+  <div class="text-center py-4 py-sm-5">
+    <i class="bi bi-inbox display-4 display-sm-1 text-muted"></i>
+    <h3 class="mt-3 text-muted fs-4 fs-sm-3">No se encontraron asignaciones</h3>
+    <p class="text-muted mb-4">Intenta ajustar los filtros o crear una nueva asignación</p>
+    <a href="{{ url_for('asignacion_nueva') }}" class="btn btn-primary">
+      <i class="bi bi-plus-circle me-1"></i>Nueva Asignación
+    </a>
+  </div>
+  {% endif %}
+</div>
+
+<!-- Modal de confirmación -->
+<div class="modal fade" id="confirmarEliminacionModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">
+          <i class="bi bi-exclamation-triangle text-warning me-2"></i>
+          Confirmar eliminación
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p>¿Estás seguro de que deseas eliminar la asignación de <strong id="nombreAsignacion"></strong>?</p>
+        <p class="text-muted mb-0">Esta acción no se puede deshacer.</p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <form method="POST" id="formEliminar" class="d-inline">
+          <button type="submit" class="btn btn-danger">
+            <i class="bi bi-trash me-1"></i>Eliminar
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+/* Variables CSS para tema */
+:root {
+  --bs-primary: #0d6efd;
+  --bs-secondary: #6c757d;
+  --bs-success: #198754;
+  --bs-warning: #ffc107;
+  --bs-danger: #dc3545;
+  --bs-light: #f8f9fa;
+  --bs-dark: #212529;
+  --surface-color: #ffffff;
+  --text-color: #212529;
+  --border-color: #dee2e6;
+  --shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+}
+
+[data-theme="dark"] {
+  --bs-light: #343a40;
+  --bs-dark: #f8f9fa;
+  --surface-color: #1a1a1a;
+  --text-color: #f8f9fa;
+  --border-color: #495057;
+  --shadow: 0 0.125rem 0.25rem rgba(255, 255, 255, 0.1);
+}
+
+/* Aplicar tema */
+body {
+  background-color: var(--surface-color);
+  color: var(--text-color);
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+.card {
+  background-color: var(--surface-color);
+  border-color: var(--border-color);
+  box-shadow: var(--shadow);
+}
+
+.table {
+  --bs-table-bg: var(--surface-color);
+  --bs-table-color: var(--text-color);
+  --bs-table-border-color: var(--border-color);
+}
+
+.table-light {
+  --bs-table-bg: var(--bs-light);
+}
+
+/* Avatar */
+.avatar-sm {
+  width: 2rem;
+  height: 2rem;
+  font-size: 0.875rem;
+  flex-shrink: 0;
+}
+
+.avatar-md {
+  width: 2.5rem;
+  height: 2.5rem;
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+/* Cards de asignaciones */
+.asignacion-card {
+  transition: all 0.3s ease;
+  border: 1px solid var(--border-color);
+}
+
+.asignacion-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+}
+
+/* Animaciones */
+.asignacion-row {
+  transition: all 0.2s ease;
+}
+
+.asignacion-row:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 0.25rem 0.5rem rgba(0, 0, 0, 0.1);
+}
+
+/* Breakpoints específicos */
+@media (max-width: 575.98px) {
+  .container-fluid {
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+  }
+  
+  .card {
+    border-radius: 0.5rem;
+  }
+  
+  .btn-group .btn {
+    padding: 0.375rem 0.5rem;
+    font-size: 0.875rem;
+  }
+  
+  .badge {
+    font-size: 0.7rem;
+  }
+  
+  .h3 {
+    font-size: 1.25rem;
+  }
+}
+
+@media (min-width: 576px) and (max-width: 767.98px) {
+  .container-fluid {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+  
+  .asignacion-card {
+    margin-bottom: 1rem;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 991.98px) {
+  .table td {
+    padding: 0.75rem;
+  }
+  
+  .btn-group .btn {
+    padding: 0.375rem 0.75rem;
+  }
+}
+
+@media (min-width: 992px) {
+  .container-fluid {
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+  
+  .table td {
+    padding: 1rem 0.75rem;
+  }
+}
+
+/* Responsive utilities */
+@media (max-width: 991.98px) {
+  .d-lg-none {
+    display: block !important;
+  }
+  
+  .d-none.d-lg-block {
+    display: none !important;
+  }
+}
+
+@media (min-width: 992px) {
+  .d-lg-none {
+    display: none !important;
+  }
+  
+  .d-none.d-lg-block {
+    display: block !important;
+  }
+}
+
+/* Contenedor responsivo */
+.container-fluid {
+  transition: padding 0.3s ease;
+}
+
+/* Dropdown mejorado */
+.dropdown-menu {
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow);
+  border-radius: 0.5rem;
+}
+
+.dropdown-item {
+  padding: 0.5rem 1rem;
+  transition: all 0.2s ease;
+}
+
+.dropdown-item:hover {
+  background-color: var(--bs-primary);
+  color: white;
+}
+
+/* Texto truncado */
+.text-truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Ajustes para cards en móvil */
+@media (max-width: 575.98px) {
+  .asignacion-card .card-body {
+    padding: 1rem;
+  }
+  
+  .asignacion-card .row .col-6 {
+    margin-bottom: 0.75rem;
+  }
+  
+  .asignacion-card .bg-light {
+    background-color: rgba(var(--bs-secondary-rgb), 0.1) !important;
+  }
+}
+
+/* Mejoras para touch devices */
+@media (hover: none) and (pointer: coarse) {
+  .btn:hover {
+    transform: none;
+  }
+  
+  .asignacion-card:hover {
+    transform: none;
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+  }
+  
+  .asignacion-row:hover {
+    transform: none;
+    box-shadow: none;
+  }
+}
+
+/* Espaciado vertical responsivo */
+.py-responsive {
+  padding-top: 1rem;
+  padding-bottom: 1rem;
+}
+
+@media (min-width: 576px) {
+  .py-responsive {
+    padding-top: 1.5rem;
+    padding-bottom: 1.5rem;
+  }
+}
+
+@media (min-width: 768px) {
+  .py-responsive {
+    padding-top: 2rem;
+    padding-bottom: 2rem;
+  }
+}
+
+/* Optimización para pantallas muy pequeñas */
+@media (max-width: 350px) {
+  .btn-group .btn {
+    padding: 0.25rem 0.4rem;
+  }
+  
+  .badge {
+    font-size: 0.65rem;
+    padding: 0.25em 0.5em;
+  }
+  
+  .h3 {
+    font-size: 1.1rem;
+  }
+  
+  .avatar-md {
+    width: 2rem;
+    height: 2rem;
+    font-size: 0.875rem;
+  }
+}
+
+/* Loading state */
+.loading {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+/* Badges mejorados */
+.badge {
+  font-size: 0.75rem;
+  padding: 0.35em 0.65em;
+}
+
+/* Botones mejorados */
+.btn {
+  border-radius: 0.375rem;
+  transition: all 0.2s ease;
+}
+
+.btn:hover {
+  transform: translateY(-1px);
+}
+
+/* Success/Error states */
+.bg-success-subtle {
+  background-color: rgba(25, 135, 84, 0.1) !important;
+}
+
+.bg-secondary-subtle {
+  background-color: rgba(108, 117, 125, 0.1) !important;
+}
+
+.text-success {
+  color: #198754 !important;
+}
+
+.text-secondary {
+  color: #6c757d !important;
+}
+</style>
+
+<script>
+// Toggle tema
+const themeToggle = document.getElementById('themeToggle');
+const themeIcon = document.getElementById('themeIcon');
+const body = document.body;
+
+// Cargar tema guardado
+const savedTheme = localStorage.getItem('theme') || 'light';
+body.setAttribute('data-theme', savedTheme);
+themeToggle.checked = savedTheme === 'dark';
+updateThemeIcon();
+
+themeToggle.addEventListener('change', function() {
+  const theme = this.checked ? 'dark' : 'light';
+  body.setAttribute('data-theme', theme);
+  localStorage.setItem('theme', theme);
+  updateThemeIcon();
+});
+
+function updateThemeIcon() {
+  if (themeToggle.checked) {
+    themeIcon.className = 'bi bi-sun';
+  } else {
+    themeIcon.className = 'bi bi-moon-stars';
+  }
+}
+
+// Confirmación de eliminación
+function confirmarEliminacion(id, nombre) {
+  document.getElementById('nombreAsignacion').textContent = nombre;
+  document.getElementById('formEliminar').action = `/admin/asignaciones/${id}/eliminar`;
+  new bootstrap.Modal(document.getElementById('confirmarEliminacionModal')).show();
+}
+
+// Auto-submit filtros con delay
+let timeoutId;
+document.getElementById('sector').addEventListener('change', function() {
+  clearTimeout(timeoutId);
+  timeoutId = setTimeout(() => {
+    document.getElementById('filtrosForm').submit();
+  }, 300);
+});
+
+document.getElementById('reunion_id').addEventListener('change', function() {
+  clearTimeout(timeoutId);
+  timeoutId = setTimeout(() => {
+    document.getElementById('filtrosForm').submit();
+  }, 300);
+});
+
+// Loading state para acciones
+document.addEventListener('click', function(e) {
+  if (e.target.closest('.btn') && e.target.closest('form')) {
+    e.target.closest('.btn').innerHTML = '<i class="bi bi-arrow-repeat spin"></i> Procesando...';
+  }
+});
+
+// Actualizar contador
+function actualizarContador() {
+  const contador = document.getElementById('contador-asignaciones');
+  const filas = document.querySelectorAll('.asignacion-row');
+  contador.textContent = `${filas.length} registros`;
+}
+
+// Animación de carga
+document.addEventListener('DOMContentLoaded', function() {
+  document.body.classList.add('loaded');
+});
+</script>
+{% endblock %}

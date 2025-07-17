@@ -1,5 +1,8 @@
 from PIL import Image
 from io import BytesIO
+from contextlib import contextmanager
+from mysql.connector import connect, Error
+from config import MYSQL_CONFIG
 
 def redimensionar_imagen(blob, max_size=(300, 300), formato='JPEG', calidad=70):
     """
@@ -15,3 +18,21 @@ def redimensionar_imagen(blob, max_size=(300, 300), formato='JPEG', calidad=70):
     except Exception as e:
         print(f"[ERROR] No se pudo procesar la imagen: {e}")
         return None
+    
+
+
+@contextmanager
+def db_cursor(dictionary=True):
+    conn = connect(**MYSQL_CONFIG)
+    cursor = conn.cursor(dictionary=dictionary)
+    try:
+        yield conn, cursor
+        conn.commit()
+    except Error as e:
+        conn.rollback()
+        raise e
+    finally:
+        cursor.close()
+        conn.close()    
+    
+    
