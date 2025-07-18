@@ -2727,7 +2727,25 @@ def asignacion_eliminar(id_asignacion):
     flash("🗑️ Asignación eliminada correctamente", "success")
     return redirect(url_for("asignaciones_global"))    
 
+@app.route('/api/reuniones/<dni>', methods=['GET'])
+def reuniones_por_dni(dni):
+    conn = mysql.connector.connect(**MYSQL_CONFIG)
+    cursor = conn.cursor(dictionary=True)
 
+    query = """
+        SELECT r.id, r.titulo, r.fecha, r.hora, r.tipo, r.qr_url
+        FROM reuniones r
+        JOIN asignaciones a ON r.id = a.id_reunion
+        WHERE a.dni = %s AND r.activa = 1
+        ORDER BY r.fecha DESC;
+    """
+    cursor.execute(query, (dni,))
+    reuniones = cursor.fetchall()
+
+    cursor.close()
+    conn.close()
+
+    return jsonify(reuniones)
 #probamos reuniones
 
 if __name__ == '__main__':
