@@ -2729,23 +2729,27 @@ def asignacion_eliminar(id_asignacion):
 
 @app.route('/api/reuniones/<dni>', methods=['GET'])
 def reuniones_por_dni(dni):
-    conn = mysql.connector.connect(**MYSQL_CONFIG)
-    cursor = conn.cursor(dictionary=True)
+    try:
+        conn = mysql.connector.connect(**MYSQL_CONFIG)
+        cursor = conn.cursor(dictionary=True)
 
-    query = """
-        SELECT r.id, r.titulo, r.fecha, r.hora, r.tipo, r.qr_url
-        FROM reuniones r
-        JOIN asignaciones a ON r.id = a.id_reunion
-        WHERE a.dni = %s AND r.activa = 1
-        ORDER BY r.fecha DESC;
-    """
-    cursor.execute(query, (dni,))
-    reuniones = cursor.fetchall()
+        query = """
+            SELECT r.id, r.titulo, r.fecha, r.hora, r.tipo, r.qr_url
+            FROM reuniones r
+            JOIN asistencias_reuniones a ON r.id = a.id_reunion
+            WHERE a.dni_chofer = %s AND r.activa = 1
+            ORDER BY r.fecha DESC;
+        """
+        cursor.execute(query, (dni,))
+        reuniones = cursor.fetchall()
 
-    cursor.close()
-    conn.close()
+        cursor.close()
+        conn.close()
 
-    return jsonify(reuniones)
+        return jsonify(reuniones)
+    
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 #probamos reuniones
 
 if __name__ == '__main__':
