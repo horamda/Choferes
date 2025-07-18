@@ -2655,101 +2655,68 @@ def asignacion_nueva():
 
 
 
-@app.route("/admin/asignaciones/<int:id_asignacion>/editar", methods=["GET", "POST"])
-def asignacion_editar(id_asignacion):
-    next_view = None
-    with db_cursor() as (conn, cursor):
-        # Obtener la asignación
-        cursor.execute("""
-            SELECT ar.id, ar.dni_chofer, ar.id_reunion, ar.obligatorio
-            FROM asignaciones_reuniones ar
-            WHERE ar.id = %s
-        """, (id_asignacion,))
-        asignacion = cursor.fetchone()
+@app.route('/api/reuniones/<dni>', methods=['GET'])
+def reuniones_por_dni(dni):
+    conn = mysql.connector.connect(**MYSQL_CONFIG)
+    cursor = conn.cursor(dictionary=True)
 
-        if not asignacion:
-            flash("❌ Asignación no encontrada", "danger")
-            next_view = "asignaciones_global"
-        else:
-            if request.method == "POST":
-                dni = request.form["dni"]
-                reunion_id = request.form["reunion_id"]
-                obligatorio = int("obligatorio" in request.form)
-
-                cursor.execute("""
-                    SELECT id FROM asignaciones_reuniones
-                    WHERE dni_chofer = %s AND id_reunion = %s AND id != %s
-                """, (dni, reunion_id, id_asignacion))
-                duplicado = cursor.fetchone()
-
-                if duplicado:
-                    flash("⚠️ Ya existe otra asignación con ese chofer y reunión.", "warning")
-                    next_view = "asignacion_editar"
-                else:
-                    cursor.execute("""
-                        UPDATE asignaciones_reuniones
-                        SET dni_chofer = %s, id_reunion = %s, obligatorio = %s
-                        WHERE id = %s
-                    """, (dni, reunion_id, obligatorio, id_asignacion))
-                    flash("✅ Asignación actualizada correctamente", "success")
-                    next_view = "asignaciones_global"
-
-        # Solo para mostrar el formulario si no se hizo POST con redirect
-        cursor.execute("SELECT dni, nombre, sector FROM choferes")
-        choferes = cursor.fetchall()
-
-        cursor.execute("SELECT id, titulo FROM reuniones WHERE activa = TRUE")
-        reuniones = cursor.fetchall()
-
-    if next_view == "asignacion_editar":
-        return redirect(url_for("asignacion_editar", id_asignacion=id_asignacion))
-    elif next_view:
-        return redirect(url_for(next_view))
-
-    return render_template("asignaciones_editar.html",
-                           asignacion=asignacion,
-                           choferes=choferes,
-                           reuniones=reuniones)
-
-
-
-@app.route("/admin/asignaciones/<int:id_asignacion>/eliminar", methods=["POST"])
-def asignacion_eliminar(id_asignacion):
-    conn = get_connection()
-    cursor = conn.cursor()
-
-    cursor.execute("DELETE FROM asignaciones_reuniones WHERE id = %s", (id_asignacion,))
-    conn.commit()
-
+    query = """
+        SELECT r.id, r.titulo, r.frecuencia, r.dia_semana, r.hora, r.qr_code
+        FROM reuniones r
+        JOIN asignaciones_reuniones a ON r.id = a.id_reunion
+        WHERE a.dni_chofer = %s AND r.activa = 1
+        ORDER BY r.id DESC;
+    """
+    cursor.execute(query, (dni,))
+    reuniones = cursor.fetchall()
     cursor.close()
     conn.close()
 
-    flash("🗑️ Asignación eliminada correctamente", "success")
-    return redirect(url_for("asignaciones_global"))    
+    def calcular_proxima_fecha(frecuencia, dia_semana):
+        hoy = datetime.now().date()
 
-@app.route('/api/reuniones/<dni>', methods=['GET'])
-def reuniones_por_dni(dni):
-    try:
-        conn = mysql.connector.connect(**MYSQL_CONFIG)
-        cursor = conn.cursor(dictionary=True)
+        if frecuencia == 'diaria':
+            return hoy.strftime('%Y-%m-%d')
 
-        query = """
-            SELECT r.id, r.titulo, r.fecha, r.hora, r.tipo, r.qr_url
-            FROM reuniones r
-            JOIN asistencias_reuniones a ON r.id = a.id_reunion
-            WHERE a.dni_chofer = %s AND r.activa = 1
-            ORDER BY r.fecha DESC;
-        """
-        cursor.execute(query, (dni,))
-        reuniones = cursor.fetchall()
+        elif frecuencia == 'semanal':
+            dias_a_sumar = (dia_semana - hoy.weekday() + 7) % 7
+            if dias_a_sumar == 0:
+                dias_a_sumar = 7
+            proxima = hoy + timedelta(days=dias_a_sumar)
+            return proxima.strftime('%Y-%m-%d')
 
-        cursor.close()
-        conn.close()
+        elif frecuencia == 'mensual':
+            hoy_dt = datetime.now()
+            dia_objetivo = dia_semana
+            try:
+                proxima = hoy_dt.replace(day=dia_objetivo)
+                if proxima.date() <= hoy_dt.date():
+                    if hoy_dt.month == 12:
+                        proxima = proxima.replace(year=hoy_dt.year + 1, month=1)
+                    else:
+                        proxima = proxima.replace(month=hoy_dt.month + 1)
+            except ValueError:
+                proxima = hoy_dt.replace(day=28)
+            return proxima.strftime('%Y-%m-%d')
 
-        return jsonify(reuniones)
-    
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return None
+
+    for r in reuniones:
+        # Manejo seguro de hora
+        if isinstance(r["hora"], timedelta):
+            total_seconds = int(r["hora"].total_seconds())
+            horas = total_seconds // 3600
+            minutos = (total_seconds % 3600) // 60
+            r["hora"] = f"{horas:02d}:{minutos:02d}"
+        else:
+            r["hora"] = str(r["hora"])
+
+        r["proxima_fecha"] = calcular_proxima_fecha(r["frecuencia"], r["dia_semana"])
+
+    return jsonify(reuniones)
+
+
+
 #probamos reuniones
 
 if __name__ == '__main__':
