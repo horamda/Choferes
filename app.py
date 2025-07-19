@@ -2715,9 +2715,103 @@ def reuniones_por_dni(dni):
 
     return jsonify(reuniones)
 
-
-
 #probamos reuniones
+
+@app.route('/api/asistencia_qr', methods=['POST'])
+def registrar_asistencia_qr():
+    data = request.json
+    dni = data.get('dni')
+    codigo_qr = data.get('codigo_qr')
+    fecha_actual = datetime.now().strftime("%Y-%m-%d")
+
+    try:
+        conexion = mysql.connector.connect(**MYSQL_CONFIG)
+        cursor = conexion.cursor()
+
+        # Verifica si el código corresponde a una reunión válida
+        query = """
+            SELECT id FROM reuniones WHERE qr_codigo = %s AND fecha = %s
+        """
+        cursor.execute(query, (codigo_qr, fecha_actual))
+        resultado = cursor.fetchone()
+
+        if resultado:
+            id_reunion = resultado[0]
+
+            # Evitar asistencia duplicada
+            check_query = """
+                SELECT COUNT(*) FROM asistencia WHERE dni = %s AND reunion_id = %s
+            """
+            cursor.execute(check_query, (dni, id_reunion))
+            if cursor.fetchone()[0] > 0:
+                return jsonify({'estado': 'ya_registrado'}), 200
+
+            # Registrar asistencia
+            insert_query = """
+                INSERT INTO asistencia (dni, reunion_id, fecha_asistencia)
+                VALUES (%s, %s, NOW())
+            """
+            cursor.execute(insert_query, (dni, id_reunion))
+            conexion.commit()
+            return jsonify({'estado': 'ok'}), 200
+
+        else:
+            return jsonify({'estado': 'qr_invalido'}), 404
+
+    except Exception as e:
+        return jsonify({'estado': 'error', 'mensaje': str(e)}), 500
+
+    finally:
+        if conexion.is_connected():
+            cursor.close()
+            conexion.close()
+@app.route("/admin/asignaciones/<int:id_asignacion>/editar", methods=["GET", "POST"])
+def asignacion_editar(id_asignacion):
+    with db_cursor() as (conn, cursor):
+        if request.method == "POST":
+            nuevo_dni = request.form["dni"]
+            nuevo_reunion_id = request.form["reunion_id"]
+            nuevo_obligatorio = int("obligatorio" in request.form)
+
+            # Verificar si ya existe esa combinación (excepto para la actual)
+            cursor.execute("""
+                SELECT id FROM asignaciones_reuniones 
+                WHERE dni_chofer = %s AND id_reunion = %s AND id != %s
+            """, (nuevo_dni, nuevo_reunion_id, id_asignacion))
+            duplicado = cursor.fetchone()
+
+            if duplicado:
+                flash("⚠️ Ya existe otra asignación con ese chofer y reunión", "warning")
+                return redirect(url_for("asignacion_editar", id_asignacion=id_asignacion))
+
+            cursor.execute("""
+                UPDATE asignaciones_reuniones 
+                SET dni_chofer = %s, id_reunion = %s, obligatorio = %s 
+                WHERE id = %s
+            """, (nuevo_dni, nuevo_reunion_id, nuevo_obligatorio, id_asignacion))
+
+            flash("✅ Asignación actualizada correctamente", "success")
+            return redirect(url_for("asignaciones_global"))
+
+        # GET: Cargar datos para edición
+        cursor.execute("SELECT * FROM asignaciones_reuniones WHERE id = %s", (id_asignacion,))
+        asignacion = cursor.fetchone()
+
+        cursor.execute("SELECT dni, nombre, sector FROM choferes")
+        choferes = cursor.fetchall()
+
+        cursor.execute("SELECT id, titulo FROM reuniones WHERE activa = TRUE")
+        reuniones = cursor.fetchall()
+
+    return render_template(
+        "asignaciones_editar.html",
+        asignacion=asignacion,
+        choferes=choferes,
+        reuniones=reuniones
+    )
+
+
+
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
