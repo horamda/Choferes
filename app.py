@@ -2071,7 +2071,7 @@ def historial_pedidos(dni):
 @app.route('/admin/reuniones')
 def admin_reuniones():
     if 'admin' not in session:
-        return redirect(url_for('login'))
+        return redirect(url_for('login_admin'))
 
     conn = get_connection()
     cursor = conn.cursor(dictionary=True)
@@ -2095,28 +2095,25 @@ def nueva_reunion_admin():
             frecuencia = request.form["frecuencia"]
             dia_semana = int(request.form["dia_semana"])
             hora = request.form["hora"]
+            latitud = float(request.form["latitud"])
+            longitud = float(request.form["longitud"])
 
             conn = get_connection()
             cursor = conn.cursor()
 
-            # Insertar la reunión
             cursor.execute("""
-                INSERT INTO reuniones (titulo, frecuencia, dia_semana, hora)
-                VALUES (%s, %s, %s, %s)
-            """, (titulo, frecuencia, dia_semana, hora))
+                INSERT INTO reuniones (titulo, frecuencia, dia_semana, hora, latitud, longitud)
+                VALUES (%s, %s, %s, %s, %s, %s)
+            """, (titulo, frecuencia, dia_semana, hora, latitud, longitud))
             conn.commit()
-
             reunion_id = cursor.lastrowid
-            qr_url = f"https://tusitio.com/asistencia_qr/{reunion_id}"
-            qr_filename_base = f"reunion_{reunion_id}"  # sin extensión
 
-            # 🧠 Generar QR y obtener ruta relativa
+            qr_url = f"https://tusitio.com/asistencia_qr/{reunion_id}"
+            qr_filename_base = f"reunion_{reunion_id}"
             ruta_relativa, _ = generar_qr(qr_url, qr_filename_base)
 
-            # Guardar solo la ruta relativa en la base (ej. 'qrcodes/reunion_13.png')
             cursor.execute("UPDATE reuniones SET qr_code = %s WHERE id = %s", (ruta_relativa, reunion_id))
             conn.commit()
-
             cursor.close()
             conn.close()
 
@@ -2127,8 +2124,10 @@ def nueva_reunion_admin():
 
     return render_template("admin_reunion_nueva.html")
 
+
 #MARCAR ASISTENCIA
 
+# REGISTRAR ASISTENCIA CON VALIDACION DE HORA, FECHA Y UBICACION DINAMICA
 @app.route('/api/marcar_asistencia', methods=['POST'])
 def marcar_asistencia():
     data = request.get_json()
@@ -2138,16 +2137,14 @@ def marcar_asistencia():
     lon = float(data['lon'])
 
     RADIO_METROS = 50
-    LAT_CENTRO = -36.778300
-    LON_CENTRO = -58.941200
     ventana_tolerancia = timedelta(minutes=30)
 
     conn = get_connection()
     cursor = conn.cursor()
 
-    # Buscar la reunión
+    # Buscar la reunion y su ubicacion
     cursor.execute("""
-        SELECT dia_semana, hora
+        SELECT dia_semana, hora, latitud, longitud
         FROM reuniones
         WHERE id = %s AND activa = TRUE
     """, (reunion_id,))
@@ -2158,16 +2155,22 @@ def marcar_asistencia():
         conn.close()
         return jsonify({"error": "❌ Reunión no encontrada o inactiva"}), 404
 
-    dia_semana, hora_reunion = row
+    dia_semana, hora_reunion, latitud_db, longitud_db = row
+
+    if latitud_db is None or longitud_db is None:
+        cursor.close()
+        conn.close()
+        return jsonify({"error": "📍 La reunión no tiene ubicación configurada"}), 400
+
     ahora = datetime.now()
 
-    # Validar día de la semana
+    # Validar dia
     if ahora.weekday() != dia_semana:
         cursor.close()
         conn.close()
         return jsonify({"error": "📅 No es el día programado para la reunión"}), 403
 
-    # Validar hora con tolerancia
+    # Validar hora
     hora_reunion_dt = datetime.combine(
         ahora.date(),
         datetime.strptime(str(hora_reunion), "%H:%M:%S").time()
@@ -2176,16 +2179,15 @@ def marcar_asistencia():
         cursor.close()
         conn.close()
         return jsonify({"error": "⏰ Fuera del horario permitido"}), 403
-    print("ventana_tolerancia =", ventana_tolerancia)
-    print("hora_reunion_dt =", hora_reunion_dt)
-    # Validar geolocalización
-    distancia = geodesic((lat, lon), (LAT_CENTRO, LON_CENTRO)).meters
+
+    # Validar ubicacion
+    distancia = geodesic((lat, lon), (latitud_db, longitud_db)).meters
     if distancia > RADIO_METROS:
         cursor.close()
         conn.close()
         return jsonify({"error": f"📍 Ubicación fuera del predio autorizado ({distancia:.1f}m)"}), 403
 
-    # Verificar si ya se marcó asistencia hoy
+    # Validar asistencia previa
     fecha_actual = ahora.date()
     cursor.execute("""
         SELECT id FROM asistencias_reuniones
@@ -2196,16 +2198,18 @@ def marcar_asistencia():
         conn.close()
         return jsonify({"error": "✅ Ya registraste tu asistencia"}), 409
 
-    # Registrar asistencia
+    # Insertar asistencia
     cursor.execute("""
         INSERT INTO asistencias_reuniones (id_reunion, dni_chofer, fecha, hora_entrada, latitud, longitud, asistencia)
         VALUES (%s, %s, %s, %s, %s, %s, TRUE)
     """, (reunion_id, dni, fecha_actual, ahora.time(), lat, lon))
     conn.commit()
+
     cursor.close()
     conn.close()
 
     return jsonify({"mensaje": "🟢 Asistencia registrada correctamente"}), 200
+
 #EDITAR REUNION
 @app.route("/admin/reuniones/<int:id>/editar", methods=["GET", "POST"])
 def editar_reunion_admin(id):
@@ -2215,7 +2219,6 @@ def editar_reunion_admin(id):
     cursor.execute("SELECT * FROM reuniones WHERE id = %s", (id,))
     reunion = cursor.fetchone()
 
-    # ✅ Convertir timedelta a time para el template
     if reunion and isinstance(reunion["hora"], timedelta):
         reunion["hora"] = (datetime.min + reunion["hora"]).time()
 
@@ -2224,12 +2227,15 @@ def editar_reunion_admin(id):
         frecuencia = request.form["frecuencia"]
         dia_semana = int(request.form["dia_semana"])
         hora = request.form["hora"]
+        latitud = float(request.form["latitud"])
+        longitud = float(request.form["longitud"])
 
         cursor.execute("""
             UPDATE reuniones 
-            SET titulo = %s, frecuencia = %s, dia_semana = %s, hora = %s 
+            SET titulo = %s, frecuencia = %s, dia_semana = %s, hora = %s,
+                latitud = %s, longitud = %s
             WHERE id = %s
-        """, (titulo, frecuencia, dia_semana, hora, id))
+        """, (titulo, frecuencia, dia_semana, hora, latitud, longitud, id))
         conn.commit()
 
         cursor.close()

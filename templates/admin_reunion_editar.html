@@ -2,46 +2,796 @@
 
 {% block title %}Editar Reunión{% endblock %}
 
+{% block extra_css %}
+<link href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" rel="stylesheet">
+<style>
+  :root {
+    --primary-color: #0d6efd;
+    --success-color: #198754;
+    --warning-color: #fd7e14;
+    --danger-color: #dc3545;
+    --light-bg: #f8f9fa;
+    --border-color: #dee2e6;
+    --shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    --shadow-lg: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+  }
+
+  .form-card {
+    background: white;
+    border-radius: 1rem;
+    box-shadow: var(--shadow-lg);
+    padding: 2rem;
+    margin-bottom: 2rem;
+  }
+
+  .form-section {
+    margin-bottom: 2.5rem;
+    padding-bottom: 1.5rem;
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  .form-section:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+  }
+
+  .section-title {
+    color: #495057;
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .location-preview {
+    height: 300px;
+    border: 2px solid var(--border-color);
+    border-radius: 0.75rem;
+    margin-top: 1rem;
+    position: relative;
+    overflow: hidden;
+  }
+
+  @media (max-width: 768px) {
+    .location-preview {
+      height: 250px;
+    }
+  }
+
+  .location-info {
+    background: linear-gradient(135deg, var(--light-bg) 0%, #e9ecef 100%);
+    border: 1px solid var(--border-color);
+    border-radius: 0.75rem;
+    padding: 1rem;
+    margin-top: 1rem;
+  }
+
+  .coordinate-input {
+    font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
+    font-size: 0.9rem;
+    background: var(--light-bg);
+    border: 2px solid var(--border-color);
+    transition: all 0.3s ease;
+  }
+
+  .coordinate-input:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+    background: white;
+  }
+
+  .btn-location {
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .btn-location:disabled {
+    opacity: 0.7;
+  }
+
+  .btn-location.loading::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 20px;
+    height: 20px;
+    margin: -10px 0 0 -10px;
+    border: 2px solid transparent;
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+
+  .accuracy-excellent { color: var(--success-color); font-weight: 600; }
+  .accuracy-good { color: var(--warning-color); font-weight: 600; }
+  .accuracy-poor { color: var(--danger-color); font-weight: 600; }
+
+  .input-group-enhanced {
+    position: relative;
+  }
+
+  .input-group-enhanced .form-label {
+    position: absolute;
+    top: -0.5rem;
+    left: 0.75rem;
+    background: white;
+    padding: 0 0.5rem;
+    font-size: 0.85rem;
+    color: #6c757d;
+    z-index: 10;
+  }
+
+  .form-control:focus + .form-label,
+  .form-control:not(:placeholder-shown) + .form-label {
+    color: var(--primary-color);
+  }
+
+  .btn-group-responsive {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+
+  @media (max-width: 576px) {
+    .form-card {
+      padding: 1.5rem 1rem;
+      margin: 1rem;
+      border-radius: 0.75rem;
+    }
+    
+    .btn-group-responsive {
+      flex-direction: column;
+    }
+    
+    .btn-group-responsive .btn {
+      width: 100%;
+      margin-bottom: 0.5rem;
+    }
+    
+    .location-preview {
+      height: 200px;
+      margin-left: -1rem;
+      margin-right: -1rem;
+      border-radius: 0;
+      border-left: none;
+      border-right: none;
+    }
+  }
+
+  .toast-container {
+    position: fixed;
+    top: 1rem;
+    right: 1rem;
+    z-index: 1050;
+  }
+
+  .progress-bar-location {
+    height: 3px;
+    background: linear-gradient(90deg, var(--primary-color), var(--success-color));
+    border-radius: 1.5px;
+    transition: width 0.3s ease;
+  }
+
+  .map-loading {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 1000;
+    background: rgba(255, 255, 255, 0.9);
+    padding: 1rem;
+    border-radius: 0.5rem;
+    display: none;
+  }
+
+  .map-loading.show {
+    display: block;
+  }
+
+  /* Mejoras para el mapa en móvil */
+  .leaflet-control-container {
+    pointer-events: none;
+  }
+  
+  .leaflet-control {
+    pointer-events: auto;
+  }
+  
+  @media (max-width: 768px) {
+    .leaflet-control-zoom {
+      transform: scale(1.2);
+    }
+    
+    .leaflet-control-attribution {
+      font-size: 0.7rem;
+    }
+  }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="container mt-4">
-  <h2>✏️ Editar Reunión</h2>
-  <form method="POST" action="/admin/reuniones/{{ reunion.id }}/editar" class="mt-3">
+<div class="container-fluid px-3">
+  <div class="row justify-content-center">
+    <div class="col-12 col-lg-10 col-xl-8">
+      
+      <!-- Header -->
+      <div class="d-flex align-items-center justify-content-between mb-4">
+        <div>
+          <h1 class="h3 mb-1">✏️ Editar Reunión</h1>
+          <p class="text-muted mb-0">Modifica los detalles de la reunión</p>
+        </div>
+        <div class="d-none d-md-block">
+          <span class="badge bg-primary">ID: {{ reunion.id }}</span>
+        </div>
+      </div>
 
-    <div class="mb-3">
-      <label for="titulo" class="form-label">Título</label>
-      <input type="text" class="form-control" name="titulo" id="titulo" value="{{ reunion.titulo }}" required>
+    <form method="POST" action="{{ url_for('editar_reunion_admin', id=reunion.id) }}" class="needs-validation" novalidate>
+        <!-- Información Básica -->
+        <div class="form-card">
+          <div class="form-section">
+            <div class="section-title">
+              📋 Información Básica
+            </div>
+            
+            <div class="mb-4">
+              <label for="titulo" class="form-label">Título de la Reunión *</label>
+              <input type="text" 
+                     class="form-control form-control-lg" 
+                     name="titulo" 
+                     id="titulo" 
+                     value="{{ reunion.titulo }}" 
+                     required 
+                     maxlength="100"
+                     placeholder="Ej: Reunión de Equipo Semanal">
+              <div class="form-text">
+                <span id="titleCount">{{ reunion.titulo|length }}</span>/100 caracteres
+              </div>
+              <div class="invalid-feedback">
+                Por favor, ingresa un título para la reunión.
+              </div>
+            </div>
+          </div>
+
+          <!-- Programación -->
+          <div class="form-section">
+            <div class="section-title">
+              📅 Programación
+            </div>
+            
+            <div class="row g-3">
+              <div class="col-md-4">
+                <label for="frecuencia" class="form-label">Frecuencia *</label>
+                <select class="form-select" name="frecuencia" id="frecuencia" required>
+                  <option value="diaria" {% if reunion.frecuencia == 'diaria' %}selected{% endif %}>
+                    📅 Diaria
+                  </option>
+                  <option value="semanal" {% if reunion.frecuencia == 'semanal' %}selected{% endif %}>
+                    📅 Semanal
+                  </option>
+                  <option value="mensual" {% if reunion.frecuencia == 'mensual' %}selected{% endif %}>
+                    📅 Mensual
+                  </option>
+                </select>
+                <div class="invalid-feedback">
+                  Selecciona una frecuencia.
+                </div>
+              </div>
+
+              <div class="col-md-4">
+                <label for="dia_semana" class="form-label">Día de la Semana *</label>
+                <select class="form-select" name="dia_semana" id="dia_semana" required>
+                  {% set dias = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'] %}
+                  {% for i in range(7) %}
+                    <option value="{{ i }}" {% if reunion.dia_semana == i %}selected{% endif %}>
+                      {{ dias[i] }}
+                    </option>
+                  {% endfor %}
+                </select>
+                <div class="invalid-feedback">
+                  Selecciona un día de la semana.
+                </div>
+              </div>
+
+              <div class="col-md-4">
+                <label for="hora" class="form-label">Hora *</label>
+                <input type="time" 
+                       class="form-control" 
+                       name="hora" 
+                       id="hora"
+                       value="{{ reunion.hora.strftime('%H:%M') if reunion.hora else '' }}" 
+                       required>
+                <div class="invalid-feedback">
+                  Selecciona una hora.
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Ubicación -->
+          <div class="form-section">
+            <div class="section-title">
+              📍 Ubicación de la Reunión
+            </div>
+            
+            <div class="row g-3 mb-3">
+              <div class="col-md-6">
+                <label for="latitud" class="form-label">Latitud *</label>
+                <input type="number" 
+                       class="form-control coordinate-input" 
+                       name="latitud" 
+                       id="latitud" 
+                       step="0.000001" 
+                       min="-90" 
+                       max="90" 
+                       value="{{ reunion.latitud }}" 
+                       required
+                       placeholder="-34.603722">
+                <div class="invalid-feedback">
+                  Ingresa una latitud válida (-90 a 90).
+                </div>
+              </div>
+
+              <div class="col-md-6">
+                <label for="longitud" class="form-label">Longitud *</label>
+                <input type="number" 
+                       class="form-control coordinate-input" 
+                       name="longitud" 
+                       id="longitud" 
+                       step="0.000001" 
+                       min="-180" 
+                       max="180" 
+                       value="{{ reunion.longitud }}" 
+                       required
+                       placeholder="-58.381592">
+                <div class="invalid-feedback">
+                  Ingresa una longitud válida (-180 a 180).
+                </div>
+              </div>
+            </div>
+
+            <div class="btn-group-responsive mb-3">
+              <button type="button" class="btn btn-info btn-location" onclick="getCurrentLocation()" id="locationBtn">
+                📍 Usar mi ubicación actual
+              </button>
+              <button type="button" class="btn btn-outline-secondary" onclick="centerMap()" id="centerBtn">
+                🎯 Centrar mapa
+              </button>
+              <button type="button" class="btn btn-outline-info" onclick="shareLocation()" id="shareBtn">
+                📤 Compartir ubicación
+              </button>
+            </div>
+
+            <div id="accuracyInfo" class="location-info" style="display: none;">
+              <div class="d-flex align-items-center">
+                <div class="flex-grow-1">
+                  <small class="text-muted"></small>
+                </div>
+              </div>
+              <div class="progress mt-2" style="height: 3px;">
+                <div class="progress-bar-location" style="width: 0%"></div>
+              </div>
+            </div>
+
+            <div class="position-relative">
+              <div id="map" class="location-preview">
+                <div class="map-loading" id="mapLoading">
+                  <div class="d-flex align-items-center">
+                    <div class="spinner-border spinner-border-sm me-2" role="status"></div>
+                    <span>Cargando mapa...</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <div class="form-text mt-2">
+              💡 <strong>Tip:</strong> Haz clic en el mapa para seleccionar una ubicación precisa, arrastra el marcador o usa el botón para obtener tu ubicación actual.
+            </div>
+          </div>
+
+          <!-- Botones de Acción -->
+          <div class="d-flex flex-column flex-sm-row gap-2 pt-3">
+            <button type="submit" class="btn btn-primary btn-lg flex-grow-1">
+              💾 Guardar Cambios
+            </button>
+            <a href="{{ url_for('admin_reuniones') }}" class="btn btn-secondary">
+            </a>
+            <a href="{{ url_for('regenerar_qr_reunion', id_reunion=reunion.id) }}" class="btn btn-outline-info">
+              ♻️ Regenerar QR
+            </a>
+          </div>
+        </div>
+      </form>
     </div>
-
-    <div class="mb-3">
-      <label for="frecuencia" class="form-label">Frecuencia</label>
-      <select class="form-select" name="frecuencia" id="frecuencia" required>
-        <option value="diaria" {% if reunion.frecuencia == 'diaria' %}selected{% endif %}>Diaria</option>
-        <option value="semanal" {% if reunion.frecuencia == 'semanal' %}selected{% endif %}>Semanal</option>
-        <option value="mensual" {% if reunion.frecuencia == 'mensual' %}selected{% endif %}>Mensual</option>
-      </select>
-    </div>
-
-    <div class="mb-3">
-      <label for="dia_semana" class="form-label">Día de la Semana</label>
-      <select class="form-select" name="dia_semana" id="dia_semana" required>
-        {% set dias = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'] %}
-        {% for i in range(7) %}
-          <option value="{{ i }}" {% if reunion.dia_semana == i %}selected{% endif %}>{{ dias[i] }}</option>
-        {% endfor %}
-      </select>
-    </div>
-
-    <div class="mb-3">
-      <label for="hora" class="form-label">Hora</label>
-      <input type="time" class="form-control" name="hora" id="hora"
-       value="{{ reunion.hora.strftime('%H:%M') if reunion.hora else '' }}" required>
-    </div>
-
-    <button type="submit" class="btn btn-primary">Guardar Cambios</button>
-    <a href="/admin/reuniones" class="btn btn-secondary ms-2">Cancelar</a>
-    <a href="{{ url_for('regenerar_qr_reunion', id_reunion=reunion.id) }}" class="btn btn-secondary ms-2">
-  ♻️ Regenerar QR
-</a>
-  </form>
+  </div>
 </div>
+
+<!-- Toast Container -->
+<div class="toast-container"></div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+<script>
+  let map;
+  let marker;
+  let isInitialized = false;
+
+  // Show toast notification
+  function showToast(message, type = 'info') {
+    const toastContainer = document.querySelector('.toast-container');
+    const toastId = 'toast-' + Date.now();
+    const iconMap = {
+      'success': '✅',
+      'error': '❌',
+      'warning': '⚠️',
+      'info': 'ℹ️'
+    };
+
+    const toast = document.createElement('div');
+    toast.className = `toast align-items-center text-bg-${type} border-0`;
+    toast.setAttribute('role', 'alert');
+    toast.id = toastId;
+    toast.innerHTML = `
+      <div class="d-flex">
+        <div class="toast-body">
+          ${iconMap[type]} ${message}
+        </div>
+        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+      </div>
+    `;
+    
+    toastContainer.appendChild(toast);
+    const bsToast = new bootstrap.Toast(toast);
+    bsToast.show();
+
+    toast.addEventListener('hidden.bs.toast', () => {
+      toast.remove();
+    });
+  }
+
+  // Initialize map
+  function initMap() {
+    const mapLoading = document.getElementById('mapLoading');
+    mapLoading.classList.add('show');
+
+    try {
+      const lat = parseFloat(document.getElementById('latitud').value) || -34.603722;
+      const lng = parseFloat(document.getElementById('longitud').value) || -58.381592;
+
+      map = L.map('map', {
+        zoomControl: true,
+        attributionControl: true
+      }).setView([lat, lng], 15);
+
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+        maxZoom: 19
+      }).addTo(map);
+
+      marker = L.marker([lat, lng], { 
+        draggable: true,
+        title: 'Ubicación de la reunión'
+      }).addTo(map);
+
+      // Update coordinates when marker is dragged
+      marker.on('dragend', function(e) {
+        const pos = e.target.getLatLng();
+        updateCoordinates(pos.lat, pos.lng);
+        showToast('Ubicación actualizada', 'success');
+      });
+
+      // Update marker when clicking on map
+      map.on('click', function(e) {
+        const pos = e.latlng;
+        marker.setLatLng(pos);
+        updateCoordinates(pos.lat, pos.lng);
+        showToast('Ubicación seleccionada', 'success');
+      });
+
+      map.on('load', function() {
+        mapLoading.classList.remove('show');
+        isInitialized = true;
+      });
+
+      // Force load event if it doesn't fire naturally
+      setTimeout(() => {
+        if (!isInitialized) {
+          mapLoading.classList.remove('show');
+          isInitialized = true;
+        }
+      }, 2000);
+
+    } catch (error) {
+      console.error('Error initializing map:', error);
+      mapLoading.innerHTML = '<div class="text-center text-muted">Error al cargar el mapa</div>';
+    }
+  }
+
+  function updateCoordinates(lat, lng) {
+    document.getElementById('latitud').value = lat.toFixed(6);
+    document.getElementById('longitud').value = lng.toFixed(6);
+  }
+
+  function centerMap() {
+    const lat = parseFloat(document.getElementById('latitud').value);
+    const lng = parseFloat(document.getElementById('longitud').value);
+    
+    if (!isNaN(lat) && !isNaN(lng)) {
+      map.setView([lat, lng], 17);
+      marker.setLatLng([lat, lng]);
+      showToast('Mapa centrado en la ubicación', 'info');
+    } else {
+      showToast('Coordenadas inválidas', 'error');
+    }
+  }
+
+  function shareLocation() {
+    const lat = parseFloat(document.getElementById('latitud').value);
+    const lng = parseFloat(document.getElementById('longitud').value);
+    
+    if (!isNaN(lat) && !isNaN(lng)) {
+      const url = `https://www.google.com/maps?q=${lat},${lng}`;
+      navigator.clipboard.writeText(url).then(() => {
+        showToast('Ubicación copiada al portapapeles', 'success');
+      }).catch(() => {
+        // Fallback for older browsers
+        const textArea = document.createElement('textarea');
+        textArea.value = url;
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+        showToast('Ubicación copiada al portapapeles', 'success');
+      });
+    }
+  }
+
+  // Listen to coordinate input changes
+  ['latitud', 'longitud'].forEach(id => {
+    document.getElementById(id).addEventListener('input', function() {
+      const lat = parseFloat(document.getElementById('latitud').value);
+      const lng = parseFloat(document.getElementById('longitud').value);
+      if (!isNaN(lat) && !isNaN(lng) && isInitialized) {
+        marker.setLatLng([lat, lng]);
+        map.panTo([lat, lng]);
+      }
+    });
+  });
+
+  function esCelular() {
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  }
+
+  function getCurrentLocation() {
+    const locationBtn = document.getElementById('locationBtn');
+    const accuracyInfo = document.getElementById('accuracyInfo');
+    const progressBar = accuracyInfo.querySelector('.progress-bar-location');
+
+    if (!navigator.geolocation) {
+      showToast('Tu navegador no soporta geolocalización', 'error');
+      return;
+    }
+
+    locationBtn.disabled = true;
+    locationBtn.classList.add('loading');
+    locationBtn.innerHTML = '🔄 Obteniendo ubicación...';
+    accuracyInfo.style.display = 'none';
+
+    // Start progress animation
+    let progress = 0;
+    const progressInterval = setInterval(() => {
+      progress += Math.random() * 15;
+      if (progress > 90) progress = 90;
+      progressBar.style.width = progress + '%';
+    }, 200);
+
+    navigator.geolocation.getCurrentPosition(
+      function (position) {
+        clearInterval(progressInterval);
+        progressBar.style.width = '100%';
+
+        const lat = position.coords.latitude;
+        const lng = position.coords.longitude;
+        const accuracy = position.coords.accuracy;
+
+        updateCoordinates(lat, lng);
+        marker.setLatLng([lat, lng]);
+        map.setView([lat, lng], 17);
+
+        // Show accuracy info
+        const accuracyText = accuracyInfo.querySelector('small');
+        let accuracyClass = '';
+        let accuracyIcon = '';
+
+        if (accuracy <= 10) {
+          accuracyClass = 'accuracy-excellent';
+          accuracyIcon = '✅';
+        } else if (accuracy <= 50) {
+          accuracyClass = 'accuracy-good';
+          accuracyIcon = '⚠️';
+        } else {
+          accuracyClass = 'accuracy-poor';
+          accuracyIcon = '❌';
+        }
+
+        accuracyText.innerHTML = `${accuracyIcon} <span class="${accuracyClass}">Precisión: ±${accuracy.toFixed(1)} metros</span>`;
+        if (!esCelular()) {
+          accuracyText.innerHTML += ' <small class="text-muted">(La precisión puede ser menor desde computadora)</small>';
+        }
+        
+        accuracyInfo.style.display = 'block';
+        locationBtn.innerHTML = '✅ Ubicación obtenida';
+        locationBtn.classList.remove('loading');
+
+        showToast('Ubicación obtenida correctamente', 'success');
+
+        setTimeout(() => {
+          locationBtn.innerHTML = '📍 Usar mi ubicación actual';
+          locationBtn.disabled = false;
+          progressBar.style.width = '0%';
+        }, 3000);
+      },
+      function (error) {
+        clearInterval(progressInterval);
+        progressBar.style.width = '0%';
+        
+        let errorMsg = '';
+        switch(error.code) {
+          case error.PERMISSION_DENIED:
+            errorMsg = 'Acceso denegado. Permite el acceso a tu ubicación en la configuración del navegador.';
+            break;
+          case error.POSITION_UNAVAILABLE:
+            errorMsg = 'Ubicación no disponible. Verifica tu conexión GPS.';
+            break;
+          case error.TIMEOUT:
+            errorMsg = 'Tiempo de espera agotado. Inténtalo nuevamente.';
+            break;
+          default:
+            errorMsg = 'Error desconocido al obtener la ubicación.';
+            break;
+        }
+        showToast(errorMsg, 'error');
+        locationBtn.innerHTML = '📍 Usar mi ubicación actual';
+        locationBtn.classList.remove('loading');
+        locationBtn.disabled = false;
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 15000,
+        maximumAge: 300000 // 5 minutes
+      }
+    );
+  }
+
+  // Character counter for title
+  document.getElementById('titulo').addEventListener('input', function() {
+    const count = this.value.length;
+    document.getElementById('titleCount').textContent = count;
+    
+    if (count > 80) {
+      document.getElementById('titleCount').style.color = '#dc3545';
+    } else if (count > 60) {
+      document.getElementById('titleCount').style.color = '#fd7e14';
+    } else {
+      document.getElementById('titleCount').style.color = '#6c757d';
+    }
+  });
+
+  // Form validation
+  (function() {
+    'use strict';
+    window.addEventListener('load', function() {
+      const form = document.querySelector('.needs-validation');
+      form.addEventListener('submit', function(event) {
+        const lat = parseFloat(document.getElementById('latitud').value);
+        const lng = parseFloat(document.getElementById('longitud').value);
+
+        // Custom coordinate validation
+        let isValid = true;
+
+        if (isNaN(lat) || lat < -90 || lat > 90) {
+          document.getElementById('latitud').setCustomValidity('Latitud inválida');
+          isValid = false;
+        } else {
+          document.getElementById('latitud').setCustomValidity('');
+        }
+
+        if (isNaN(lng) || lng < -180 || lng > 180) {
+          document.getElementById('longitud').setCustomValidity('Longitud inválida');
+          isValid = false;
+        } else {
+          document.getElementById('longitud').setCustomValidity('');
+        }
+
+        if (!form.checkValidity() || !isValid) {
+          event.preventDefault();
+          event.stopPropagation();
+          showToast('Por favor, corrige los errores en el formulario', 'error');
+        } else {
+          showToast('Guardando cambios...', 'info');
+        }
+
+        form.classList.add('was-validated');
+      }, false);
+    }, false);
+  })();
+
+  // Initialize map when page loads
+ document.addEventListener('DOMContentLoaded', function() {
+  setTimeout(() => {
+    initMap();
+    setTimeout(() => {
+      if (map) map.invalidateSize();
+    }, 500);
+  }, 100);
+});
+function initMap() {
+    const mapLoading = document.getElementById('mapLoading');
+    mapLoading.classList.add('show');
+   console.log('🗺️ Iniciando mapa...');
+    console.log('📍 Leaflet disponible:', typeof L !== 'undefined');
+    console.log('📦 Contenedor mapa:', document.getElementById('map'));
+    try {
+        const lat = parseFloat(document.getElementById('latitud').value) || -34.603722;
+        const lng = parseFloat(document.getElementById('longitud').value) || -58.381592;
+
+        map = L.map('map', {
+            zoomControl: true,
+            attributionControl: true
+        }).setView([lat, lng], 15);
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors',
+            maxZoom: 19
+        }).addTo(map);
+
+        marker = L.marker([lat, lng], { 
+            draggable: true,
+            title: 'Ubicación de la reunión'
+        }).addTo(map);
+
+        // Eventos
+        marker.on('dragend', function(e) {
+            const pos = e.target.getLatLng();
+            updateCoordinates(pos.lat, pos.lng);
+            showToast('Ubicación actualizada', 'success');
+        });
+
+        map.on('click', function(e) {
+            const pos = e.latlng;
+            marker.setLatLng(pos);
+            updateCoordinates(pos.lat, pos.lng);
+            showToast('Ubicación seleccionada', 'success');
+        });
+
+        // CRÍTICO: Ocultar loading inmediatamente
+        setTimeout(() => {
+            mapLoading.classList.remove('show');
+            isInitialized = true;
+            map.invalidateSize();
+        }, 500);
+
+    } catch (error) {
+        console.error('Error initializing map:', error);
+        mapLoading.innerHTML = '<div class="text-center text-muted">❌ Error al cargar el mapa</div>';
+    }
+}
+  // Handle window resize
+  window.addEventListener('resize', function() {
+    if (map && isInitialized) {
+      setTimeout(() => {
+        map.invalidateSize();
+      }, 200);
+    }
+  });
+</script>
 {% endblock %}
