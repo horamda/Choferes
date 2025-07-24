@@ -20,7 +20,7 @@ from geopy.distance import geodesic
 from PIL import Image
 import pandas as pd
 from flask import send_file
-
+from config import RADIO_VALIDACION_METROS, TOLERANCIA_MINUTOS_REUNION
 
 
 # Configurar logging
@@ -2131,18 +2131,17 @@ def nueva_reunion_admin():
 @app.route('/api/marcar_asistencia', methods=['POST'])
 def marcar_asistencia():
     data = request.get_json()
-    reunion_id = data['reunion_id']
-    dni = data['dni']
-    lat = float(data['lat'])
-    lon = float(data['lon'])
+    reunion_id = data.get('reunion_id')
+    dni = data.get('dni')
+    lat = float(data.get('lat'))
+    lon = float(data.get('lon'))
 
-    RADIO_METROS = 50
-    ventana_tolerancia = timedelta(minutes=30)
+    ventana_tolerancia = timedelta(minutes=TOLERANCIA_MINUTOS_REUNION)
 
     conn = get_connection()
     cursor = conn.cursor()
 
-    # Buscar la reunion y su ubicacion
+    # Buscar la reunión
     cursor.execute("""
         SELECT dia_semana, hora, latitud, longitud
         FROM reuniones
@@ -2151,41 +2150,36 @@ def marcar_asistencia():
     row = cursor.fetchone()
 
     if not row:
-        cursor.close()
-        conn.close()
+        cursor.close(); conn.close()
         return jsonify({"error": "❌ Reunión no encontrada o inactiva"}), 404
 
     dia_semana, hora_reunion, latitud_db, longitud_db = row
 
     if latitud_db is None or longitud_db is None:
-        cursor.close()
-        conn.close()
+        cursor.close(); conn.close()
         return jsonify({"error": "📍 La reunión no tiene ubicación configurada"}), 400
 
     ahora = datetime.now()
 
-    # Validar dia
+    # Validar día
     if ahora.weekday() != dia_semana:
-        cursor.close()
-        conn.close()
+        cursor.close(); conn.close()
         return jsonify({"error": "📅 No es el día programado para la reunión"}), 403
 
-    # Validar hora
+    # Validar horario (± tolerancia)
     hora_reunion_dt = datetime.combine(
         ahora.date(),
         datetime.strptime(str(hora_reunion), "%H:%M:%S").time()
     )
     if not (hora_reunion_dt - ventana_tolerancia <= ahora <= hora_reunion_dt + ventana_tolerancia):
-        cursor.close()
-        conn.close()
+        cursor.close(); conn.close()
         return jsonify({"error": "⏰ Fuera del horario permitido"}), 403
 
-    # Validar ubicacion
+    # Validar ubicación
     distancia = geodesic((lat, lon), (latitud_db, longitud_db)).meters
-    if distancia > RADIO_METROS:
-        cursor.close()
-        conn.close()
-        return jsonify({"error": f"📍 Ubicación fuera del predio autorizado ({distancia:.1f}m)"}), 403
+    if distancia > RADIO_VALIDACION_METROS:
+        cursor.close(); conn.close()
+        return jsonify({"error": f"📍 Ubicación fuera del rango permitido ({distancia:.1f}m)"}), 403
 
     # Validar asistencia previa
     fecha_actual = ahora.date()
@@ -2194,13 +2188,13 @@ def marcar_asistencia():
         WHERE id_reunion = %s AND dni_chofer = %s AND fecha = %s
     """, (reunion_id, dni, fecha_actual))
     if cursor.fetchone():
-        cursor.close()
-        conn.close()
+        cursor.close(); conn.close()
         return jsonify({"error": "✅ Ya registraste tu asistencia"}), 409
 
-    # Insertar asistencia
+    # Registrar asistencia
     cursor.execute("""
-        INSERT INTO asistencias_reuniones (id_reunion, dni_chofer, fecha, hora_entrada, latitud, longitud, asistencia)
+        INSERT INTO asistencias_reuniones 
+        (id_reunion, dni_chofer, fecha, hora_entrada, latitud, longitud, asistencia)
         VALUES (%s, %s, %s, %s, %s, %s, TRUE)
     """, (reunion_id, dni, fecha_actual, ahora.time(), lat, lon))
     conn.commit()
@@ -2209,6 +2203,7 @@ def marcar_asistencia():
     conn.close()
 
     return jsonify({"mensaje": "🟢 Asistencia registrada correctamente"}), 200
+
 
 #EDITAR REUNION
 @app.route("/admin/reuniones/<int:id>/editar", methods=["GET", "POST"])
@@ -2723,54 +2718,6 @@ def reuniones_por_dni(dni):
 
 #probamos reuniones
 
-@app.route('/api/asistencia_qr', methods=['POST'])
-def registrar_asistencia_qr():
-    data = request.json
-    dni = data.get('dni')
-    codigo_qr = data.get('codigo_qr')
-    fecha_actual = datetime.now().strftime("%Y-%m-%d")
-
-    try:
-        conexion = mysql.connector.connect(**MYSQL_CONFIG)
-        cursor = conexion.cursor()
-
-        # Verifica si el código corresponde a una reunión válida
-        query = """
-            SELECT id FROM reuniones WHERE qr_codigo = %s AND fecha = %s
-        """
-        cursor.execute(query, (codigo_qr, fecha_actual))
-        resultado = cursor.fetchone()
-
-        if resultado:
-            id_reunion = resultado[0]
-
-            # Evitar asistencia duplicada
-            check_query = """
-                SELECT COUNT(*) FROM asistencia WHERE dni = %s AND reunion_id = %s
-            """
-            cursor.execute(check_query, (dni, id_reunion))
-            if cursor.fetchone()[0] > 0:
-                return jsonify({'estado': 'ya_registrado'}), 200
-
-            # Registrar asistencia
-            insert_query = """
-                INSERT INTO asistencia (dni, reunion_id, fecha_asistencia)
-                VALUES (%s, %s, NOW())
-            """
-            cursor.execute(insert_query, (dni, id_reunion))
-            conexion.commit()
-            return jsonify({'estado': 'ok'}), 200
-
-        else:
-            return jsonify({'estado': 'qr_invalido'}), 404
-
-    except Exception as e:
-        return jsonify({'estado': 'error', 'mensaje': str(e)}), 500
-
-    finally:
-        if conexion.is_connected():
-            cursor.close()
-            conexion.close()
 @app.route("/admin/asignaciones/<int:id_asignacion>/editar", methods=["GET", "POST"])
 def asignacion_editar(id_asignacion):
     with db_cursor() as (conn, cursor):

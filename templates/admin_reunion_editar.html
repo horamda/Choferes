@@ -3,795 +3,1382 @@
 {% block title %}Editar Reunión{% endblock %}
 
 {% block extra_css %}
-<link href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+      crossorigin=""/>
 <style>
-  :root {
-    --primary-color: #0d6efd;
-    --success-color: #198754;
-    --warning-color: #fd7e14;
-    --danger-color: #dc3545;
-    --light-bg: #f8f9fa;
-    --border-color: #dee2e6;
-    --shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
-    --shadow-lg: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
-  }
-
-  .form-card {
-    background: white;
-    border-radius: 1rem;
-    box-shadow: var(--shadow-lg);
-    padding: 2rem;
-    margin-bottom: 2rem;
-  }
-
-  .form-section {
-    margin-bottom: 2.5rem;
-    padding-bottom: 1.5rem;
-    border-bottom: 1px solid var(--border-color);
-  }
-
-  .form-section:last-child {
-    border-bottom: none;
-    margin-bottom: 0;
-  }
-
-  .section-title {
-    color: #495057;
-    font-size: 1.1rem;
-    font-weight: 600;
-    margin-bottom: 1rem;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-  }
-
-  .location-preview {
-    height: 300px;
-    border: 2px solid var(--border-color);
-    border-radius: 0.75rem;
-    margin-top: 1rem;
-    position: relative;
-    overflow: hidden;
-  }
-
-  @media (max-width: 768px) {
-    .location-preview {
-      height: 250px;
+    /* Variables CSS personalizadas */
+    :root {
+        --primary-color: #007bff;
+        --secondary-color: #6c757d;
+        --success-color: #28a745;
+        --border-radius: 12px;
+        --border-radius-sm: 8px;
+        --spacing-xs: 0.5rem;
+        --spacing-sm: 1rem;
+        --spacing-md: 1.5rem;
+        --spacing-lg: 2rem;
+        --shadow-sm: 0 2px 4px rgba(0,0,0,0.1);
+        --shadow-md: 0 4px 12px rgba(0,0,0,0.15);
+        --transition: all 0.3s ease;
     }
-  }
-
-  .location-info {
-    background: linear-gradient(135deg, var(--light-bg) 0%, #e9ecef 100%);
-    border: 1px solid var(--border-color);
-    border-radius: 0.75rem;
-    padding: 1rem;
-    margin-top: 1rem;
-  }
-
-  .coordinate-input {
-    font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
-    font-size: 0.9rem;
-    background: var(--light-bg);
-    border: 2px solid var(--border-color);
-    transition: all 0.3s ease;
-  }
-
-  .coordinate-input:focus {
-    border-color: var(--primary-color);
-    box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
-    background: white;
-  }
-
-  .btn-location {
-    transition: all 0.3s ease;
-    position: relative;
-    overflow: hidden;
-  }
-
-  .btn-location:disabled {
-    opacity: 0.7;
-  }
-
-  .btn-location.loading::after {
-    content: '';
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    width: 20px;
-    height: 20px;
-    margin: -10px 0 0 -10px;
-    border: 2px solid transparent;
-    border-top-color: white;
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-  }
-
-  @keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
-  }
-
-  .accuracy-excellent { color: var(--success-color); font-weight: 600; }
-  .accuracy-good { color: var(--warning-color); font-weight: 600; }
-  .accuracy-poor { color: var(--danger-color); font-weight: 600; }
-
-  .input-group-enhanced {
-    position: relative;
-  }
-
-  .input-group-enhanced .form-label {
-    position: absolute;
-    top: -0.5rem;
-    left: 0.75rem;
-    background: white;
-    padding: 0 0.5rem;
-    font-size: 0.85rem;
-    color: #6c757d;
-    z-index: 10;
-  }
-
-  .form-control:focus + .form-label,
-  .form-control:not(:placeholder-shown) + .form-label {
-    color: var(--primary-color);
-  }
-
-  .btn-group-responsive {
-    display: flex;
-    gap: 0.5rem;
-    flex-wrap: wrap;
-  }
-
-  @media (max-width: 576px) {
-    .form-card {
-      padding: 1.5rem 1rem;
-      margin: 1rem;
-      border-radius: 0.75rem;
+    .map-controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--spacing-xs);
+        margin-bottom: var(--spacing-md);
+        padding: var(--spacing-xs);
+        background: #f8f9fa;
+        border-radius: 6px;
+        border: 1px solid #e9ecef;
     }
-    
-    .btn-group-responsive {
-      flex-direction: column;
-    }
-    
-    .btn-group-responsive .btn {
-      width: 100%;
-      margin-bottom: 0.5rem;
-    }
-    
-    .location-preview {
-      height: 200px;
-      margin-left: -1rem;
-      margin-right: -1rem;
-      border-radius: 0;
-      border-left: none;
-      border-right: none;
-    }
-  }
 
-  .toast-container {
-    position: fixed;
-    top: 1rem;
-    right: 1rem;
-    z-index: 1050;
-  }
-
-  .progress-bar-location {
-    height: 3px;
-    background: linear-gradient(90deg, var(--primary-color), var(--success-color));
-    border-radius: 1.5px;
-    transition: width 0.3s ease;
-  }
-
-  .map-loading {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    z-index: 1000;
-    background: rgba(255, 255, 255, 0.9);
-    padding: 1rem;
-    border-radius: 0.5rem;
-    display: none;
-  }
-
-  .map-loading.show {
-    display: block;
-  }
-
-  /* Mejoras para el mapa en móvil */
-  .leaflet-control-container {
-    pointer-events: none;
-  }
-  
-  .leaflet-control {
-    pointer-events: auto;
-  }
-  
-  @media (max-width: 768px) {
-    .leaflet-control-zoom {
-      transform: scale(1.2);
+    .map-controls .btn {
+        flex: 1;
+        min-width: 120px;
+        font-size: 0.85rem;
+        padding: 0.5rem 0.75rem;
     }
-    
-    .leaflet-control-attribution {
-      font-size: 0.7rem;
+
+    @media (min-width: 576px) {
+        .map-controls .btn {
+            flex: none;
+        }
     }
-  }
+
+    /* Responsive del mapa integrado */
+    @media (max-width: 767px) {
+        .map-section {
+            padding: var(--spacing-sm);
+        }
+        
+        #map-container {
+            height: 300px;
+        }
+        
+        .map-controls {
+            flex-direction: column;
+        }
+        
+        .map-controls .btn {
+            min-width: auto;
+        }
+    }
+
+    /* Container principal */
+    .meeting-edit-container {
+        min-height: 100vh;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        padding: var(--spacing-sm);
+    }
+
+    /* Formulario principal */
+    .form-container {
+        max-width: 1000px;
+        margin: 0 auto;
+        background: white;
+        border-radius: var(--border-radius);
+        box-shadow: var(--shadow-md);
+        overflow: hidden;
+        animation: slideUp 0.5s ease-out;
+    }
+
+    @keyframes slideUp {
+        from {
+            opacity: 0;
+            transform: translateY(30px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    /* Header del formulario */
+    .form-header {
+        background: linear-gradient(135deg, var(--primary-color), #0056b3);
+        color: white;
+        padding: var(--spacing-lg);
+        text-align: center;
+    }
+
+    .form-header h1 {
+        margin: 0;
+        font-size: clamp(1.5rem, 4vw, 2.5rem);
+        font-weight: 600;
+    }
+
+    .form-header p {
+        margin: var(--spacing-xs) 0 0 0;
+        opacity: 0.9;
+        font-size: clamp(0.9rem, 2.5vw, 1.1rem);
+    }
+
+    /* Contenido del formulario */
+    .form-content {
+        padding: var(--spacing-lg);
+    }
+
+    /* Secciones del formulario */
+    .form-section {
+        margin-bottom: var(--spacing-lg);
+        padding-bottom: var(--spacing-md);
+        border-bottom: 2px solid #f8f9fa;
+        transition: var(--transition);
+    }
+
+    .form-section:last-child {
+        border-bottom: none;
+        margin-bottom: 0;
+    }
+
+    .form-section:hover {
+        transform: translateY(-2px);
+    }
+
+    .form-section-title {
+        font-size: clamp(1.1rem, 3vw, 1.4rem);
+        font-weight: 600;
+        color: #2c3e50;
+        margin-bottom: var(--spacing-sm);
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-xs);
+        padding: var(--spacing-xs) 0;
+        border-left: 4px solid var(--primary-color);
+        padding-left: var(--spacing-sm);
+    }
+
+    /* Campos del formulario */
+    .form-label {
+        font-weight: 600;
+        color: #495057;
+        margin-bottom: var(--spacing-xs);
+        font-size: clamp(0.9rem, 2.5vw, 1rem);
+    }
+
+    .required-field::after {
+        content: " *";
+        color: #dc3545;
+        font-weight: bold;
+    }
+
+    .form-control, .form-select {
+        border: 2px solid #e9ecef;
+        border-radius: var(--border-radius-sm);
+        padding: 0.75rem;
+        font-size: clamp(0.9rem, 2.5vw, 1rem);
+        transition: var(--transition);
+        background: white;
+    }
+
+    .form-control:focus, .form-select:focus {
+        border-color: var(--primary-color);
+        box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+        transform: translateY(-1px);
+    }
+
+    /* Grid responsive */
+    .responsive-grid {
+        display: grid;
+        gap: var(--spacing-sm);
+        grid-template-columns: 1fr;
+    }
+
+    @media (min-width: 768px) {
+        .responsive-grid {
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        }
+        
+        .responsive-grid.grid-3 {
+            grid-template-columns: repeat(3, 1fr);
+        }
+        
+        .responsive-grid.grid-2 {
+            grid-template-columns: repeat(2, 1fr);
+        }
+    }
+
+    /* Coordenadas */
+    .coordinate-input {
+        font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+        background: #f8f9fa;
+        font-weight: 500;
+    }
+
+    /* Contador de caracteres */
+    .char-counter {
+        font-size: 0.8rem;
+        color: #6c757d;
+        text-align: right;
+        margin-top: 0.25rem;
+        font-weight: 500;
+    }
+
+    /* Contenedor del mapa - mejor integrado */
+    .map-section {
+        background: white;
+        border: 2px solid #e9ecef;
+        border-radius: var(--border-radius-sm);
+        padding: var(--spacing-md);
+        margin-top: var(--spacing-sm);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        transition: var(--transition);
+    }
+
+    .map-section:hover {
+        border-color: #dee2e6;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+    }
+
+    .map-section h3 {
+        margin: 0 0 var(--spacing-sm) 0;
+        color: #495057;
+        font-size: 1.1rem;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    #map-container {
+        width: 100%;
+        height: 400px;
+        border: 2px solid #dee2e6;
+        border-radius: 8px;
+        overflow: hidden;
+        position: relative;
+        background: #f8f9fa;
+        box-shadow: inset 0 2px 4px rgba(0,0,0,0.06);
+    }
+
+    #map {
+        width: 100%;
+        height: 100%;
+        display: block;
+        border-radius: 6px;
+    }
+
+    /* Indicador de carga del mapa */
+    .map-loading {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: rgba(255, 255, 255, 0.9);
+        padding: var(--spacing-sm);
+        border-radius: var(--border-radius-sm);
+        display: none;
+        z-index: 1000;
+    }
+
+    /* Botones mejorados */
+    .btn {
+        border-radius: var(--border-radius-sm);
+        padding: 0.75rem 1.5rem;
+        font-weight: 600;
+        font-size: clamp(0.85rem, 2.5vw, 0.95rem);
+        border: none;
+        transition: var(--transition);
+        display: inline-flex;
+        align-items: center;
+        gap: var(--spacing-xs);
+        text-decoration: none;
+        cursor: pointer;
+    }
+
+    .btn:hover {
+        transform: translateY(-2px);
+        box-shadow: var(--shadow-md);
+    }
+
+    .btn-primary {
+        background: linear-gradient(135deg, var(--primary-color), #0056b3);
+        color: white;
+    }
+
+    .btn-secondary {
+        background: linear-gradient(135deg, var(--secondary-color), #545b62);
+        color: white;
+    }
+
+    .btn-outline-primary {
+        border: 2px solid var(--primary-color);
+        color: var(--primary-color);
+        background: white;
+    }
+
+    .btn-outline-primary:hover {
+        background: var(--primary-color);
+        color: white;
+    }
+
+    .btn-outline-secondary {
+        border: 2px solid var(--secondary-color);
+        color: var(--secondary-color);
+        background: white;
+    }
+
+    .btn-outline-secondary:hover {
+        background: var(--secondary-color);
+        color: white;
+    }
+
+    .btn-outline-info {
+        border: 2px solid #17a2b8;
+        color: #17a2b8;
+        background: white;
+    }
+
+    .btn-outline-info:hover {
+        background: #17a2b8;
+        color: white;
+    }
+
+    /* Botones de acción */
+    .action-buttons {
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing-sm);
+        margin-top: var(--spacing-lg);
+        padding-top: var(--spacing-lg);
+        border-top: 2px solid #f8f9fa;
+    }
+
+    @media (min-width: 768px) {
+        .action-buttons {
+            flex-direction: row;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .action-buttons .btn-group {
+            display: flex;
+            gap: var(--spacing-xs);
+        }
+    }
+
+    /* Spinner para loading */
+    .spinner-border-sm {
+        width: 1rem;
+        height: 1rem;
+        animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+
+    /* Estados de validación */
+    .form-control.is-invalid, .form-select.is-invalid {
+        border-color: #dc3545;
+        box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25);
+    }
+
+    .form-control.is-valid, .form-select.is-valid {
+        border-color: var(--success-color);
+        box-shadow: 0 0 0 0.2rem rgba(40, 167, 69, 0.25);
+    }
+
+    /* Tooltip personalizado */
+    .custom-tooltip {
+        position: relative;
+        cursor: help;
+    }
+
+    .custom-tooltip::after {
+        content: attr(data-tooltip);
+        position: absolute;
+        bottom: 125%;
+        left: 50%;
+        transform: translateX(-50%);
+        background: #333;
+        color: white;
+        padding: 0.5rem;
+        border-radius: 4px;
+        font-size: 0.8rem;
+        white-space: nowrap;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.3s;
+        z-index: 1000;
+    }
+
+    .custom-tooltip:hover::after {
+        opacity: 1;
+    }
+
+    /* Responsive adjustments */
+    @media (max-width: 767px) {
+        .meeting-edit-container {
+            padding: 0.5rem;
+        }
+        
+        .form-content {
+            padding: var(--spacing-sm);
+        }
+        
+        .form-header {
+            padding: var(--spacing-sm) var(--spacing-sm) var(--spacing-lg);
+        }
+        
+        #map-container {
+            height: 40vh;
+            min-height: 250px;
+        }
+    }
+
+    /* Mejoras de accesibilidad */
+    .form-control:focus-visible,
+    .form-select:focus-visible,
+    .btn:focus-visible {
+        outline: 3px solid rgba(0, 123, 255, 0.5);
+        outline-offset: 2px;
+    }
+
+    /* Estados hover para móvil */
+    @media (hover: hover) {
+        .form-section:hover {
+            background: rgba(0, 123, 255, 0.02);
+            border-radius: var(--border-radius-sm);
+        }
+    }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="container-fluid px-3">
-  <div class="row justify-content-center">
-    <div class="col-12 col-lg-10 col-xl-8">
-      
-      <!-- Header -->
-      <div class="d-flex align-items-center justify-content-between mb-4">
-        <div>
-          <h1 class="h3 mb-1">✏️ Editar Reunión</h1>
-          <p class="text-muted mb-0">Modifica los detalles de la reunión</p>
+<div class="meeting-edit-container">
+    <div class="form-container">
+        <!-- Header -->
+        <div class="form-header">
+            <h1>✏️ Editar Reunión</h1>
+            <p>Modifica los detalles de la reunión de forma sencilla</p>
         </div>
-        <div class="d-none d-md-block">
-          <span class="badge bg-primary">ID: {{ reunion.id }}</span>
+        
+        <!-- Contenido del formulario -->
+        <div class="form-content">
+            <form method="POST" action="{{ url_for('editar_reunion_admin', id=reunion.id) }}" class="needs-validation" novalidate>
+                
+                <!-- Información Básica -->
+                <div class="form-section">
+                    <h2 class="form-section-title">📋 Información Básica</h2>
+                    
+                    <div class="mb-3">
+                        <label for="titulo" class="form-label required-field">Título de la Reunión</label>
+                        <input type="text" 
+                               class="form-control" 
+                               id="titulo" 
+                               name="titulo" 
+                               value="{{ reunion.titulo }}" 
+                               maxlength="100" 
+                               placeholder="Ej: Reunión semanal de equipo"
+                               required>
+                        <div class="char-counter">
+                            <span id="titleCount">{{ reunion.titulo|length }}</span>/100 caracteres
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Programación -->
+                <div class="form-section">
+                    <h2 class="form-section-title">📅 Programación</h2>
+                    
+                    <div class="responsive-grid grid-3">
+                        <div>
+                            <label for="frecuencia" class="form-label required-field">Frecuencia</label>
+                            <select class="form-select" id="frecuencia" name="frecuencia" required>
+                                <option value="">Seleccionar frecuencia</option>
+                                <option value="diaria" {% if reunion.frecuencia == 'diaria' %}selected{% endif %}>📅 Diaria</option>
+                                <option value="semanal" {% if reunion.frecuencia == 'semanal' %}selected{% endif %}>📆 Semanal</option>
+                                <option value="mensual" {% if reunion.frecuencia == 'mensual' %}selected{% endif %}>🗓️ Mensual</option>
+                            </select>
+                        </div>
+                        
+                        <div>
+                            <label for="dia_semana" class="form-label required-field">Día de la Semana</label>
+                            <select class="form-select" id="dia_semana" name="dia_semana" required>
+                                <option value="">Seleccionar día</option>
+                                <option value="0" {% if reunion.dia_semana == 0 %}selected{% endif %}>🌙 Lunes</option>
+                                <option value="1" {% if reunion.dia_semana == 1 %}selected{% endif %}>🔥 Martes</option>
+                                <option value="2" {% if reunion.dia_semana == 2 %}selected{% endif %}>⚡ Miércoles</option>
+                                <option value="3" {% if reunion.dia_semana == 3 %}selected{% endif %}>🚀 Jueves</option>
+                                <option value="4" {% if reunion.dia_semana == 4 %}selected{% endif %}>🎉 Viernes</option>
+                                <option value="5" {% if reunion.dia_semana == 5 %}selected{% endif %}>🌅 Sábado</option>
+                                <option value="6" {% if reunion.dia_semana == 6 %}selected{% endif %}>☀️ Domingo</option>
+                            </select>
+                        </div>
+                        
+                        <div>
+                            <label for="hora" class="form-label required-field">Hora</label>
+                            <input type="time" 
+                                   class="form-control" 
+                                   id="hora" 
+                                   name="hora" 
+                                   value="{{ reunion.hora.strftime('%H:%M') if reunion.hora else '' }}" 
+                                   required>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Ubicación -->
+                <div class="form-section">
+                    <h2 class="form-section-title">📍 Ubicación de la Reunión</h2>
+                    
+                    <div class="responsive-grid grid-2 mb-3">
+                        <div>
+                            <label for="latitud" class="form-label required-field custom-tooltip" data-tooltip="Coordenada Norte-Sur (-90 a 90)">
+                                🌐 Latitud
+                            </label>
+                            <input type="number" 
+                                   class="form-control coordinate-input" 
+                                   id="latitud" 
+                                   name="latitud" 
+                                   step="0.000001" 
+                                   min="-90" 
+                                   max="90" 
+                                   value="{{ reunion.latitud }}" 
+                                   placeholder="-34.603722"
+                                   required>
+                        </div>
+                        
+                        <div>
+                            <label for="longitud" class="form-label required-field custom-tooltip" data-tooltip="Coordenada Este-Oeste (-180 a 180)">
+                                🗺️ Longitud
+                            </label>
+                            <input type="number" 
+                                   class="form-control coordinate-input" 
+                                   id="longitud" 
+                                   name="longitud" 
+                                   step="0.000001" 
+                                   min="-180" 
+                                   max="180" 
+                                   value="{{ reunion.longitud }}" 
+                                   placeholder="-58.381592"
+                                   required>
+                        </div>
+                    </div>
+                    
+                    <div class="map-section">
+                        <div class="map-controls">
+                            <button type="button" class="btn btn-outline-primary" onclick="getCurrentLocation()" id="locationBtn">
+                                <i class="bi bi-geo-alt"></i> Mi ubicación
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary" onclick="centerMap()">
+                                <i class="bi bi-zoom-in"></i> Centrar mapa
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary" onclick="fullscreenMap()">
+                                <i class="bi bi-arrows-fullscreen"></i> Pantalla completa
+                            </button>
+                        </div>
+                        
+                        <div id="map-container">
+                            <div class="map-loading" id="mapLoading">
+                                <div class="d-flex align-items-center">
+                                    <div class="spinner-border spinner-border-sm me-2" role="status"></div>
+                                    Cargando mapa...
+                                </div>
+                            </div>
+                            <div id="map"></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Botones de Acción -->
+                <div class="action-buttons">
+                    <a href="{{ url_for('admin_reuniones') }}" class="btn btn-secondary">
+                        <i class="bi bi-arrow-left"></i> Volver
+                    </a>
+                    <div class="btn-group">
+                        <a href="{{ url_for('regenerar_qr_reunion', id_reunion=reunion.id) }}" class="btn btn-outline-info">
+                            <i class="bi bi-qr-code"></i> Regenerar QR
+                        </a>
+                        <button type="submit" class="btn btn-primary" id="submitBtn">
+                            <i class="bi bi-save"></i> Guardar Cambios
+                        </button>
+                    </div>
+                </div>
+                
+            </form>
         </div>
-      </div>
-
-    <form method="POST" action="{{ url_for('editar_reunion_admin', id=reunion.id) }}" class="needs-validation" novalidate>
-        <!-- Información Básica -->
-        <div class="form-card">
-          <div class="form-section">
-            <div class="section-title">
-              📋 Información Básica
-            </div>
-            
-            <div class="mb-4">
-              <label for="titulo" class="form-label">Título de la Reunión *</label>
-              <input type="text" 
-                     class="form-control form-control-lg" 
-                     name="titulo" 
-                     id="titulo" 
-                     value="{{ reunion.titulo }}" 
-                     required 
-                     maxlength="100"
-                     placeholder="Ej: Reunión de Equipo Semanal">
-              <div class="form-text">
-                <span id="titleCount">{{ reunion.titulo|length }}</span>/100 caracteres
-              </div>
-              <div class="invalid-feedback">
-                Por favor, ingresa un título para la reunión.
-              </div>
-            </div>
-          </div>
-
-          <!-- Programación -->
-          <div class="form-section">
-            <div class="section-title">
-              📅 Programación
-            </div>
-            
-            <div class="row g-3">
-              <div class="col-md-4">
-                <label for="frecuencia" class="form-label">Frecuencia *</label>
-                <select class="form-select" name="frecuencia" id="frecuencia" required>
-                  <option value="diaria" {% if reunion.frecuencia == 'diaria' %}selected{% endif %}>
-                    📅 Diaria
-                  </option>
-                  <option value="semanal" {% if reunion.frecuencia == 'semanal' %}selected{% endif %}>
-                    📅 Semanal
-                  </option>
-                  <option value="mensual" {% if reunion.frecuencia == 'mensual' %}selected{% endif %}>
-                    📅 Mensual
-                  </option>
-                </select>
-                <div class="invalid-feedback">
-                  Selecciona una frecuencia.
-                </div>
-              </div>
-
-              <div class="col-md-4">
-                <label for="dia_semana" class="form-label">Día de la Semana *</label>
-                <select class="form-select" name="dia_semana" id="dia_semana" required>
-                  {% set dias = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'] %}
-                  {% for i in range(7) %}
-                    <option value="{{ i }}" {% if reunion.dia_semana == i %}selected{% endif %}>
-                      {{ dias[i] }}
-                    </option>
-                  {% endfor %}
-                </select>
-                <div class="invalid-feedback">
-                  Selecciona un día de la semana.
-                </div>
-              </div>
-
-              <div class="col-md-4">
-                <label for="hora" class="form-label">Hora *</label>
-                <input type="time" 
-                       class="form-control" 
-                       name="hora" 
-                       id="hora"
-                       value="{{ reunion.hora.strftime('%H:%M') if reunion.hora else '' }}" 
-                       required>
-                <div class="invalid-feedback">
-                  Selecciona una hora.
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Ubicación -->
-          <div class="form-section">
-            <div class="section-title">
-              📍 Ubicación de la Reunión
-            </div>
-            
-            <div class="row g-3 mb-3">
-              <div class="col-md-6">
-                <label for="latitud" class="form-label">Latitud *</label>
-                <input type="number" 
-                       class="form-control coordinate-input" 
-                       name="latitud" 
-                       id="latitud" 
-                       step="0.000001" 
-                       min="-90" 
-                       max="90" 
-                       value="{{ reunion.latitud }}" 
-                       required
-                       placeholder="-34.603722">
-                <div class="invalid-feedback">
-                  Ingresa una latitud válida (-90 a 90).
-                </div>
-              </div>
-
-              <div class="col-md-6">
-                <label for="longitud" class="form-label">Longitud *</label>
-                <input type="number" 
-                       class="form-control coordinate-input" 
-                       name="longitud" 
-                       id="longitud" 
-                       step="0.000001" 
-                       min="-180" 
-                       max="180" 
-                       value="{{ reunion.longitud }}" 
-                       required
-                       placeholder="-58.381592">
-                <div class="invalid-feedback">
-                  Ingresa una longitud válida (-180 a 180).
-                </div>
-              </div>
-            </div>
-
-            <div class="btn-group-responsive mb-3">
-              <button type="button" class="btn btn-info btn-location" onclick="getCurrentLocation()" id="locationBtn">
-                📍 Usar mi ubicación actual
-              </button>
-              <button type="button" class="btn btn-outline-secondary" onclick="centerMap()" id="centerBtn">
-                🎯 Centrar mapa
-              </button>
-              <button type="button" class="btn btn-outline-info" onclick="shareLocation()" id="shareBtn">
-                📤 Compartir ubicación
-              </button>
-            </div>
-
-            <div id="accuracyInfo" class="location-info" style="display: none;">
-              <div class="d-flex align-items-center">
-                <div class="flex-grow-1">
-                  <small class="text-muted"></small>
-                </div>
-              </div>
-              <div class="progress mt-2" style="height: 3px;">
-                <div class="progress-bar-location" style="width: 0%"></div>
-              </div>
-            </div>
-
-            <div class="position-relative">
-              <div id="map" class="location-preview">
-                <div class="map-loading" id="mapLoading">
-                  <div class="d-flex align-items-center">
-                    <div class="spinner-border spinner-border-sm me-2" role="status"></div>
-                    <span>Cargando mapa...</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-            
-            <div class="form-text mt-2">
-              💡 <strong>Tip:</strong> Haz clic en el mapa para seleccionar una ubicación precisa, arrastra el marcador o usa el botón para obtener tu ubicación actual.
-            </div>
-          </div>
-
-          <!-- Botones de Acción -->
-          <div class="d-flex flex-column flex-sm-row gap-2 pt-3">
-            <button type="submit" class="btn btn-primary btn-lg flex-grow-1">
-              💾 Guardar Cambios
-            </button>
-            <a href="{{ url_for('admin_reuniones') }}" class="btn btn-secondary">
-            </a>
-            <a href="{{ url_for('regenerar_qr_reunion', id_reunion=reunion.id) }}" class="btn btn-outline-info">
-              ♻️ Regenerar QR
-            </a>
-          </div>
-        </div>
-      </form>
     </div>
-  </div>
 </div>
-
-<!-- Toast Container -->
-<div class="toast-container"></div>
 {% endblock %}
 
-{% block extra_js %}
-<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+{% block scripts %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+        crossorigin=""></script>
+
 <script>
-  let map;
-  let marker;
-  let isInitialized = false;
+// Variables globales
+let map, marker;
+let isMapInitialized = false;
 
-  // Show toast notification
-  function showToast(message, type = 'info') {
-    const toastContainer = document.querySelector('.toast-container');
-    const toastId = 'toast-' + Date.now();
-    const iconMap = {
-      'success': '✅',
-      'error': '❌',
-      'warning': '⚠️',
-      'info': 'ℹ️'
-    };
+// Configuración del mapa
+const mapConfig = {
+    defaultLat: -34.6037,
+    defaultLng: -58.3816,
+    defaultZoom: 15,
+    maxZoom: 19,
+    minZoom: 3
+};
 
-    const toast = document.createElement('div');
-    toast.className = `toast align-items-center text-bg-${type} border-0`;
-    toast.setAttribute('role', 'alert');
-    toast.id = toastId;
-    toast.innerHTML = `
-      <div class="d-flex">
-        <div class="toast-body">
-          ${iconMap[type]} ${message}
-        </div>
-        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
-      </div>
-    `;
-    
-    toastContainer.appendChild(toast);
-    const bsToast = new bootstrap.Toast(toast);
-    bsToast.show();
-
-    toast.addEventListener('hidden.bs.toast', () => {
-      toast.remove();
-    });
-  }
-
-  // Initialize map
-  function initMap() {
-    const mapLoading = document.getElementById('mapLoading');
-    mapLoading.classList.add('show');
-
-    try {
-      const lat = parseFloat(document.getElementById('latitud').value) || -34.603722;
-      const lng = parseFloat(document.getElementById('longitud').value) || -58.381592;
-
-      map = L.map('map', {
-        zoomControl: true,
-        attributionControl: true
-      }).setView([lat, lng], 15);
-
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-        maxZoom: 19
-      }).addTo(map);
-
-      marker = L.marker([lat, lng], { 
-        draggable: true,
-        title: 'Ubicación de la reunión'
-      }).addTo(map);
-
-      // Update coordinates when marker is dragged
-      marker.on('dragend', function(e) {
-        const pos = e.target.getLatLng();
-        updateCoordinates(pos.lat, pos.lng);
-        showToast('Ubicación actualizada', 'success');
-      });
-
-      // Update marker when clicking on map
-      map.on('click', function(e) {
-        const pos = e.latlng;
-        marker.setLatLng(pos);
-        updateCoordinates(pos.lat, pos.lng);
-        showToast('Ubicación seleccionada', 'success');
-      });
-
-      map.on('load', function() {
-        mapLoading.classList.remove('show');
-        isInitialized = true;
-      });
-
-      // Force load event if it doesn't fire naturally
-      setTimeout(() => {
-        if (!isInitialized) {
-          mapLoading.classList.remove('show');
-          isInitialized = true;
-        }
-      }, 2000);
-
-    } catch (error) {
-      console.error('Error initializing map:', error);
-      mapLoading.innerHTML = '<div class="text-center text-muted">Error al cargar el mapa</div>';
-    }
-  }
-
-  function updateCoordinates(lat, lng) {
-    document.getElementById('latitud').value = lat.toFixed(6);
-    document.getElementById('longitud').value = lng.toFixed(6);
-  }
-
-  function centerMap() {
-    const lat = parseFloat(document.getElementById('latitud').value);
-    const lng = parseFloat(document.getElementById('longitud').value);
-    
-    if (!isNaN(lat) && !isNaN(lng)) {
-      map.setView([lat, lng], 17);
-      marker.setLatLng([lat, lng]);
-      showToast('Mapa centrado en la ubicación', 'info');
-    } else {
-      showToast('Coordenadas inválidas', 'error');
-    }
-  }
-
-  function shareLocation() {
-    const lat = parseFloat(document.getElementById('latitud').value);
-    const lng = parseFloat(document.getElementById('longitud').value);
-    
-    if (!isNaN(lat) && !isNaN(lng)) {
-      const url = `https://www.google.com/maps?q=${lat},${lng}`;
-      navigator.clipboard.writeText(url).then(() => {
-        showToast('Ubicación copiada al portapapeles', 'success');
-      }).catch(() => {
-        // Fallback for older browsers
-        const textArea = document.createElement('textarea');
-        textArea.value = url;
-        document.body.appendChild(textArea);
-        textArea.select();
-        document.execCommand('copy');
-        document.body.removeChild(textArea);
-        showToast('Ubicación copiada al portapapeles', 'success');
-      });
-    }
-  }
-
-  // Listen to coordinate input changes
-  ['latitud', 'longitud'].forEach(id => {
-    document.getElementById(id).addEventListener('input', function() {
-      const lat = parseFloat(document.getElementById('latitud').value);
-      const lng = parseFloat(document.getElementById('longitud').value);
-      if (!isNaN(lat) && !isNaN(lng) && isInitialized) {
-        marker.setLatLng([lat, lng]);
-        map.panTo([lat, lng]);
-      }
-    });
-  });
-
-  function esCelular() {
-    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-  }
-
-  function getCurrentLocation() {
-    const locationBtn = document.getElementById('locationBtn');
-    const accuracyInfo = document.getElementById('accuracyInfo');
-    const progressBar = accuracyInfo.querySelector('.progress-bar-location');
-
-    if (!navigator.geolocation) {
-      showToast('Tu navegador no soporta geolocalización', 'error');
-      return;
-    }
-
-    locationBtn.disabled = true;
-    locationBtn.classList.add('loading');
-    locationBtn.innerHTML = '🔄 Obteniendo ubicación...';
-    accuracyInfo.style.display = 'none';
-
-    // Start progress animation
-    let progress = 0;
-    const progressInterval = setInterval(() => {
-      progress += Math.random() * 15;
-      if (progress > 90) progress = 90;
-      progressBar.style.width = progress + '%';
-    }, 200);
-
-    navigator.geolocation.getCurrentPosition(
-      function (position) {
-        clearInterval(progressInterval);
-        progressBar.style.width = '100%';
-
-        const lat = position.coords.latitude;
-        const lng = position.coords.longitude;
-        const accuracy = position.coords.accuracy;
-
-        updateCoordinates(lat, lng);
-        marker.setLatLng([lat, lng]);
-        map.setView([lat, lng], 17);
-
-        // Show accuracy info
-        const accuracyText = accuracyInfo.querySelector('small');
-        let accuracyClass = '';
-        let accuracyIcon = '';
-
-        if (accuracy <= 10) {
-          accuracyClass = 'accuracy-excellent';
-          accuracyIcon = '✅';
-        } else if (accuracy <= 50) {
-          accuracyClass = 'accuracy-good';
-          accuracyIcon = '⚠️';
-        } else {
-          accuracyClass = 'accuracy-poor';
-          accuracyIcon = '❌';
-        }
-
-        accuracyText.innerHTML = `${accuracyIcon} <span class="${accuracyClass}">Precisión: ±${accuracy.toFixed(1)} metros</span>`;
-        if (!esCelular()) {
-          accuracyText.innerHTML += ' <small class="text-muted">(La precisión puede ser menor desde computadora)</small>';
-        }
-        
-        accuracyInfo.style.display = 'block';
-        locationBtn.innerHTML = '✅ Ubicación obtenida';
-        locationBtn.classList.remove('loading');
-
-        showToast('Ubicación obtenida correctamente', 'success');
-
-        setTimeout(() => {
-          locationBtn.innerHTML = '📍 Usar mi ubicación actual';
-          locationBtn.disabled = false;
-          progressBar.style.width = '0%';
-        }, 3000);
-      },
-      function (error) {
-        clearInterval(progressInterval);
-        progressBar.style.width = '0%';
-        
-        let errorMsg = '';
-        switch(error.code) {
-          case error.PERMISSION_DENIED:
-            errorMsg = 'Acceso denegado. Permite el acceso a tu ubicación en la configuración del navegador.';
-            break;
-          case error.POSITION_UNAVAILABLE:
-            errorMsg = 'Ubicación no disponible. Verifica tu conexión GPS.';
-            break;
-          case error.TIMEOUT:
-            errorMsg = 'Tiempo de espera agotado. Inténtalo nuevamente.';
-            break;
-          default:
-            errorMsg = 'Error desconocido al obtener la ubicación.';
-            break;
-        }
-        showToast(errorMsg, 'error');
-        locationBtn.innerHTML = '📍 Usar mi ubicación actual';
-        locationBtn.classList.remove('loading');
-        locationBtn.disabled = false;
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 15000,
-        maximumAge: 300000 // 5 minutes
-      }
-    );
-  }
-
-  // Character counter for title
-  document.getElementById('titulo').addEventListener('input', function() {
-    const count = this.value.length;
-    document.getElementById('titleCount').textContent = count;
-    
-    if (count > 80) {
-      document.getElementById('titleCount').style.color = '#dc3545';
-    } else if (count > 60) {
-      document.getElementById('titleCount').style.color = '#fd7e14';
-    } else {
-      document.getElementById('titleCount').style.color = '#6c757d';
-    }
-  });
-
-  // Form validation
-  (function() {
-    'use strict';
-    window.addEventListener('load', function() {
-      const form = document.querySelector('.needs-validation');
-      form.addEventListener('submit', function(event) {
-        const lat = parseFloat(document.getElementById('latitud').value);
-        const lng = parseFloat(document.getElementById('longitud').value);
-
-        // Custom coordinate validation
-        let isValid = true;
-
-        if (isNaN(lat) || lat < -90 || lat > 90) {
-          document.getElementById('latitud').setCustomValidity('Latitud inválida');
-          isValid = false;
-        } else {
-          document.getElementById('latitud').setCustomValidity('');
-        }
-
-        if (isNaN(lng) || lng < -180 || lng > 180) {
-          document.getElementById('longitud').setCustomValidity('Longitud inválida');
-          isValid = false;
-        } else {
-          document.getElementById('longitud').setCustomValidity('');
-        }
-
-        if (!form.checkValidity() || !isValid) {
-          event.preventDefault();
-          event.stopPropagation();
-          showToast('Por favor, corrige los errores en el formulario', 'error');
-        } else {
-          showToast('Guardando cambios...', 'info');
-        }
-
-        form.classList.add('was-validated');
-      }, false);
-    }, false);
-  })();
-
-  // Initialize map when page loads
- document.addEventListener('DOMContentLoaded', function() {
-  setTimeout(() => {
-    initMap();
-    setTimeout(() => {
-      if (map) map.invalidateSize();
-    }, 500);
-  }, 100);
-});
+// Inicializar mapa con enfoque más simple
 function initMap() {
-    const mapLoading = document.getElementById('mapLoading');
-    mapLoading.classList.add('show');
-   console.log('🗺️ Iniciando mapa...');
-    console.log('📍 Leaflet disponible:', typeof L !== 'undefined');
-    console.log('📦 Contenedor mapa:', document.getElementById('map'));
+    console.log('Iniciando mapa...');
+    
     try {
-        const lat = parseFloat(document.getElementById('latitud').value) || -34.603722;
-        const lng = parseFloat(document.getElementById('longitud').value) || -58.381592;
-
+        // Verificar que Leaflet esté disponible
+        if (typeof L === 'undefined') {
+            console.error('Leaflet no está cargado');
+            return;
+        }
+        
+        // Obtener coordenadas iniciales
+        const lat = parseFloat(document.getElementById('latitud').value) || mapConfig.defaultLat;
+        const lng = parseFloat(document.getElementById('longitud').value) || mapConfig.defaultLng;
+        
+        console.log('Coordenadas iniciales:', lat, lng);
+        
+        // Verificar que el contenedor existe
+        const mapContainer = document.getElementById('map');
+        if (!mapContainer) {
+            console.error('Contenedor del mapa no encontrado');
+            return;
+        }
+        
+        // Limpiar contenedor anterior si existe
+        if (map) {
+            map.remove();
+            map = null;
+        }
+        
+        // Limpiar HTML del contenedor
+        mapContainer.innerHTML = '';
+        
+        // Crear mapa con configuración básica
         map = L.map('map', {
+            center: [lat, lng],
+            zoom: mapConfig.defaultZoom,
+            scrollWheelZoom: true,
+            doubleClickZoom: true,
+            boxZoom: true,
+            keyboard: true,
+            dragging: true,
             zoomControl: true,
             attributionControl: true
-        }).setView([lat, lng], 15);
-
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© OpenStreetMap contributors',
-            maxZoom: 19
-        }).addTo(map);
-
-        marker = L.marker([lat, lng], { 
+        });
+        
+        console.log('Mapa creado exitosamente');
+        
+        // Agregar capa de tiles
+        const tileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap',
+            maxZoom: 18,
+            tileSize: 256,
+            zoomOffset: 0
+        });
+        
+        tileLayer.addTo(map);
+        console.log('Tiles agregados');
+        
+        // Crear marcador
+        marker = L.marker([lat, lng], {
             draggable: true,
             title: 'Ubicación de la reunión'
         }).addTo(map);
-
-        // Eventos
+        
+        // Popup del marcador
+        marker.bindPopup(`
+            <div style="text-align: center;">
+                <strong>📍 Ubicación de la reunión</strong><br>
+                <small>Arrastra el marcador o haz click en el mapa</small>
+            </div>
+        `);
+        
+        console.log('Marcador creado');
+        
+        // Event listeners
         marker.on('dragend', function(e) {
             const pos = e.target.getLatLng();
             updateCoordinates(pos.lat, pos.lng);
-            showToast('Ubicación actualizada', 'success');
+            console.log('Marcador arrastrado a:', pos.lat, pos.lng);
         });
-
+        
         map.on('click', function(e) {
-            const pos = e.latlng;
-            marker.setLatLng(pos);
-            updateCoordinates(pos.lat, pos.lng);
-            showToast('Ubicación seleccionada', 'success');
+            marker.setLatLng(e.latlng);
+            updateCoordinates(e.latlng.lat, e.latlng.lng);
+            console.log('Click en mapa:', e.latlng.lat, e.latlng.lng);
         });
-
-        // CRÍTICO: Ocultar loading inmediatamente
-        setTimeout(() => {
-            mapLoading.classList.remove('show');
-            isInitialized = true;
-            map.invalidateSize();
-        }, 500);
-
+        
+        // Esperar a que el mapa esté completamente cargado
+        map.whenReady(function() {
+            console.log('Mapa listo');
+            
+            // Pequeño delay para asegurar renderizado correcto
+            setTimeout(() => {
+                map.invalidateSize();
+                isMapInitialized = true;
+                console.log('Mapa inicializado y redimensionado correctamente');
+                
+                // Abrir popup del marcador
+                marker.openPopup();
+            }, 500);
+        });
+        
+        // Manejar errores de tiles
+        tileLayer.on('tileerror', function(error) {
+            console.warn('Error cargando tile:', error);
+        });
+        
     } catch (error) {
-        console.error('Error initializing map:', error);
-        mapLoading.innerHTML = '<div class="text-center text-muted">❌ Error al cargar el mapa</div>';
+        console.error('Error crítico inicializando mapa:', error);
+        showMapError();
     }
 }
-  // Handle window resize
-  window.addEventListener('resize', function() {
-    if (map && isInitialized) {
-      setTimeout(() => {
-        map.invalidateSize();
-      }, 200);
+
+// Mostrar error del mapa
+function showMapError() {
+    const mapContainer = document.getElementById('map');
+    if (mapContainer) {
+        mapContainer.innerHTML = `
+            <div style="
+                display: flex; 
+                align-items: center; 
+                justify-content: center; 
+                height: 100%; 
+                background: #f8f9fa; 
+                border-radius: 6px; 
+                flex-direction: column; 
+                color: #6c757d;
+                border: 2px dashed #dee2e6;
+                font-family: inherit;
+            ">
+                <div style="font-size: 3rem; margin-bottom: 1rem;">🗺️</div>
+                <div style="text-align: center;">
+                    <strong>Error al cargar el mapa</strong><br>
+                    <small>Verifica tu conexión a internet y recarga la página</small>
+                </div>
+                <button onclick="initMap()" style="
+                    margin-top: 1rem; 
+                    padding: 0.5rem 1rem; 
+                    background: #007bff; 
+                    color: white; 
+                    border: none; 
+                    border-radius: 4px; 
+                    cursor: pointer;
+                ">
+                    Reintentar
+                </button>
+            </div>
+        `;
     }
-  });
+}
+
+// Actualizar coordenadas en los inputs
+function updateCoordinates(lat, lng) {
+    document.getElementById('latitud').value = lat.toFixed(6);
+    document.getElementById('longitud').value = lng.toFixed(6);
+    
+    // Trigger validation
+    validateCoordinates();
+}
+
+// Centrar mapa en las coordenadas actuales
+function centerMap() {
+    if (!isMapInitialized || !map) {
+        console.log('Mapa no inicializado, intentando inicializar...');
+        initMap();
+        return;
+    }
+    
+    const lat = parseFloat(document.getElementById('latitud').value);
+    const lng = parseFloat(document.getElementById('longitud').value);
+    
+    if (!isNaN(lat) && !isNaN(lng) && isValidCoordinate(lat, lng)) {
+        map.setView([lat, lng], mapConfig.defaultZoom);
+        marker.setLatLng([lat, lng]);
+        console.log('Mapa centrado en:', lat, lng);
+    } else {
+        console.error('Coordenadas inválidas:', lat, lng);
+        alert('Coordenadas inválidas. Verifica los valores ingresados.');
+    }
+}
+
+// Pantalla completa del mapa
+function fullscreenMap() {
+    const mapContainer = document.getElementById('map-container');
+    
+    if (!document.fullscreenElement) {
+        mapContainer.requestFullscreen().then(() => {
+            setTimeout(() => {
+                if (map) {
+                    map.invalidateSize();
+                }
+            }, 300);
+        }).catch(() => {
+            console.log('Pantalla completa no soportada');
+        });
+    } else {
+        document.exitFullscreen();
+    }
+}
+
+// Obtener ubicación actual
+function getCurrentLocation() {
+    if (!navigator.geolocation) {
+        alert('Tu navegador no soporta geolocalización');
+        return;
+    }
+    
+    const btn = document.getElementById('locationBtn');
+    const originalContent = btn.innerHTML;
+    
+    btn.innerHTML = '<div class="spinner-border spinner-border-sm"></div> Obteniendo ubicación...';
+    btn.disabled = true;
+    
+    navigator.geolocation.getCurrentPosition(
+        function(position) {
+            const lat = position.coords.latitude;
+            const lng = position.coords.longitude;
+            
+            console.log('Ubicación obtenida:', lat, lng);
+            
+            updateCoordinates(lat, lng);
+            
+            if (isMapInitialized && map) {
+                map.setView([lat, lng], mapConfig.defaultZoom);
+                marker.setLatLng([lat, lng]);
+            }
+            
+            btn.innerHTML = '<i class="bi bi-check-circle"></i> ¡Ubicación obtenida!';
+            btn.classList.remove('btn-outline-primary');
+            btn.classList.add('btn-outline-success');
+            
+            setTimeout(() => {
+                btn.innerHTML = originalContent;
+                btn.disabled = false;
+                btn.classList.remove('btn-outline-success');
+                btn.classList.add('btn-outline-primary');
+            }, 3000);
+        },
+        function(error) {
+            let message = "Error al obtener la ubicación";
+            
+            switch(error.code) {
+                case error.PERMISSION_DENIED:
+                    message = "Permiso denegado. Activa la geolocalización en tu navegador.";
+                    break;
+                case error.POSITION_UNAVAILABLE:
+                    message = "Ubicación no disponible. Verifica tu conexión GPS.";
+                    break;
+                case error.TIMEOUT:
+                    message = "Tiempo agotado. Intenta nuevamente.";
+                    break;
+            }
+            
+            alert(message);
+            
+            btn.innerHTML = originalContent;
+            btn.disabled = false;
+        },
+        {
+            enableHighAccuracy: true,
+            timeout: 10000,
+            maximumAge: 60000
+        }
+    );
+}
+
+// Validar coordenadas
+function isValidCoordinate(lat, lng) {
+    return lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180;
+}
+
+function validateCoordinates() {
+    const latInput = document.getElementById('latitud');
+    const lngInput = document.getElementById('longitud');
+    const lat = parseFloat(latInput.value);
+    const lng = parseFloat(lngInput.value);
+    
+    // Validar latitud
+    if (isNaN(lat) || lat < -90 || lat > 90) {
+        latInput.classList.add('is-invalid');
+        latInput.classList.remove('is-valid');
+    } else {
+        latInput.classList.remove('is-invalid');
+        latInput.classList.add('is-valid');
+    }
+    
+    // Validar longitud
+    if (isNaN(lng) || lng < -180 || lng > 180) {
+        lngInput.classList.add('is-invalid');
+        lngInput.classList.remove('is-valid');
+    } else {
+        lngInput.classList.remove('is-invalid');
+        lngInput.classList.add('is-valid');
+    }
+    
+    return isValidCoordinate(lat, lng);
+}
+
+// Sistema de notificaciones
+function showNotification(message, type = 'info') {
+    // Remover notificaciones existentes
+    const existingNotifications = document.querySelectorAll('.custom-notification');
+    existingNotifications.forEach(n => n.remove());
+    
+    const notification = document.createElement('div');
+    notification.className = `custom-notification alert alert-${type === 'error' ? 'danger' : type === 'warning' ? 'warning' : type === 'success' ? 'success' : 'info'}`;
+    notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 9999;
+        max-width: 300px;
+        animation: slideInRight 0.3s ease;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    `;
+    
+    const icon = type === 'error' ? '❌' : type === 'warning' ? '⚠️' : type === 'success' ? '✅' : 'ℹ️';
+    notification.innerHTML = `
+        <div class="d-flex align-items-center">
+            <span class="me-2" style="font-size: 1.2em;">${icon}</span>
+            <span>${message}</span>
+        </div>
+    `;
+    
+    document.body.appendChild(notification);
+    
+    setTimeout(() => {
+        notification.style.animation = 'slideOutRight 0.3s ease';
+        setTimeout(() => notification.remove(), 300);
+    }, 4000);
+}
+
+function showCoordinateNotification(message) {
+    showNotification(message, 'success');
+}
+
+// Contador de caracteres para el título
+function setupCharacterCounter() {
+    const titleInput = document.getElementById('titulo');
+    const counter = document.getElementById('titleCount');
+    
+    titleInput.addEventListener('input', function() {
+        const length = this.value.length;
+        counter.textContent = length;
+        
+        // Cambiar color según la proximidad al límite
+        if (length > 90) {
+            counter.style.color = '#dc3545'; // Rojo
+        } else if (length > 75) {
+            counter.style.color = '#ffc107'; // Amarillo
+        } else {
+            counter.style.color = '#6c757d'; // Gris normal
+        }
+    });
+}
+
+// Validación del formulario
+function setupFormValidation() {
+    const form = document.querySelector('form');
+    const inputs = form.querySelectorAll('input[required], select[required]');
+    
+    // Validación en tiempo real
+    inputs.forEach(input => {
+        input.addEventListener('blur', validateField);
+        input.addEventListener('input', validateField);
+    });
+    
+    // Validación al enviar
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        let isValid = true;
+        inputs.forEach(input => {
+            if (!validateField({ target: input })) {
+                isValid = false;
+            }
+        });
+        
+        if (!validateCoordinates()) {
+            isValid = false;
+            showNotification('Las coordenadas ingresadas no son válidas', 'error');
+        }
+        
+        if (isValid) {
+            const submitBtn = document.getElementById('submitBtn');
+            submitBtn.innerHTML = '<div class="spinner-border spinner-border-sm"></div> Guardando...';
+            submitBtn.disabled = true;
+            
+            // Simular delay para mejor UX
+            setTimeout(() => {
+                form.submit();
+            }, 500);
+        } else {
+            showNotification('Por favor, completa todos los campos requeridos correctamente', 'error');
+        }
+    });
+}
+
+function validateField(event) {
+    const field = event.target;
+    const value = field.value.trim();
+    let isValid = true;
+    
+    // Validación básica de campo requerido
+    if (field.hasAttribute('required') && !value) {
+        isValid = false;
+    }
+    
+    // Validaciones específicas
+    switch (field.type) {
+        case 'time':
+            if (value && !/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/.test(value)) {
+                isValid = false;
+            }
+            break;
+        case 'number':
+            const num = parseFloat(value);
+            const min = parseFloat(field.min);
+            const max = parseFloat(field.max);
+            if (value && (isNaN(num) || (min !== undefined && num < min) || (max !== undefined && num > max))) {
+                isValid = false;
+            }
+            break;
+    }
+    
+    // Aplicar clases de validación
+    if (isValid) {
+        field.classList.remove('is-invalid');
+        field.classList.add('is-valid');
+    } else {
+        field.classList.remove('is-valid');
+        field.classList.add('is-invalid');
+    }
+    
+    return isValid;
+}
+
+// Manejo de redimensionamiento de ventana
+function setupResponsiveHandlers() {
+    let resizeTimeout;
+    
+    window.addEventListener('resize', function() {
+        clearTimeout(resizeTimeout);
+        resizeTimeout = setTimeout(() => {
+            if (isMapInitialized && map) {
+                map.invalidateSize();
+            }
+        }, 250);
+    });
+    
+    // Manejar cambio de orientación en móviles
+    window.addEventListener('orientationchange', function() {
+        setTimeout(() => {
+            if (isMapInitialized && map) {
+                map.invalidateSize();
+            }
+        }, 500);
+    });
+}
+
+// Event listeners para coordenadas
+function setupCoordinateInputs() {
+    const latInput = document.getElementById('latitud');
+    const lngInput = document.getElementById('longitud');
+    
+    [latInput, lngInput].forEach(input => {
+        input.addEventListener('input', function() {
+            validateCoordinates();
+            
+            // Actualizar mapa si las coordenadas son válidas y el mapa está inicializado
+            const lat = parseFloat(latInput.value);
+            const lng = parseFloat(lngInput.value);
+            
+            if (isMapInitialized && isValidCoordinate(lat, lng)) {
+                clearTimeout(input.updateTimeout);
+                input.updateTimeout = setTimeout(() => {
+                    map.setView([lat, lng], map.getZoom());
+                    marker.setLatLng([lat, lng]);
+                }, 1000); // Delay para evitar muchas actualizaciones
+            }
+        });
+    });
+}
+
+// Manejo de fullscreen
+function setupFullscreenHandlers() {
+    document.addEventListener('fullscreenchange', function() {
+        setTimeout(() => {
+            if (isMapInitialized && map) {
+                map.invalidateSize();
+            }
+        }, 300);
+    });
+}
+
+// Agregar estilos CSS dinámicos
+function addDynamicStyles() {
+    const style = document.createElement('style');
+    style.textContent = `
+        @keyframes slideInRight {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        
+        @keyframes slideOutRight {
+            from {
+                transform: translateX(0);
+                opacity: 1;
+            }
+            to {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+        }
+        
+        .leaflet-container {
+            font-family: inherit;
+            height: 400px !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            border-radius: 8px;
+        }
+        
+        .leaflet-control-container {
+            position: relative;
+        }
+        
+        /* Asegurar que el mapa no se desborde */
+        .map-section {
+            background: #f8f9fa;
+            border-radius: var(--border-radius-sm);
+            padding: var(--spacing-sm);
+            margin-top: var(--spacing-sm);
+            overflow: hidden;
+        }
+        
+        .leaflet-popup-content {
+            margin: 8px 12px;
+            font-size: 14px;
+        }
+        
+        .leaflet-tooltip {
+            background: rgba(0, 123, 255, 0.9);
+            border: none;
+            border-radius: 6px;
+            color: white;
+            font-weight: 500;
+        }
+        
+        /* Forzar que el mapa respete los límites del contenedor */
+        .leaflet-map-pane {
+            position: relative !important;
+        }
+        
+        .leaflet-control-attribution {
+            font-size: 10px;
+            background: rgba(255, 255, 255, 0.8);
+        }
+        
+        /* Responsive del mapa */
+        @media (max-width: 767px) {
+            #map-container {
+                height: 300px;
+            }
+            
+            #map {
+                height: 300px !important;
+                max-height: 300px;
+            }
+            
+            .leaflet-container {
+                height: 300px !important;
+            }
+            
+            .leaflet-control-zoom {
+                margin-right: 10px !important;
+                margin-top: 10px !important;
+            }
+            
+            .leaflet-control-zoom a {
+                width: 35px !important;
+                height: 35px !important;
+                line-height: 35px !important;
+                font-size: 16px !important;
+            }
+        }
+        
+        @media (min-width: 768px) and (max-width: 1024px) {
+            #map-container {
+                height: 350px;
+            }
+            
+            #map {
+                height: 350px !important;
+                max-height: 350px;
+            }
+            
+            .leaflet-container {
+                height: 350px !important;
+            }
+        }
+        
+        /* Animación para secciones del formulario */
+        .form-section {
+            transition: all 0.3s ease;
+        }
+        
+        .form-section:hover {
+            transform: translateY(-2px);
+        }
+        
+        /* Estados de carga */
+        .btn:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+        }
+        
+        /* Mejoras de accesibilidad */
+        .custom-notification {
+            border-left: 4px solid currentColor;
+        }
+        
+        /* Indicador visual para campos requeridos */
+        .form-control:required:not(:focus):not(.is-valid):not(.is-invalid),
+        .form-select:required:not(:focus):not(.is-valid):not(.is-invalid) {
+            border-left: 3px solid #ffc107;
+        }
+    `;
+    document.head.appendChild(style);
+}
+
+// Inicialización principal simplificada
+function initializeApp() {
+    console.log('Inicializando aplicación...');
+    
+    try {
+        // Configurar componentes básicos primero
+        setupCharacterCounter();
+        setupCoordinateInputs();
+        setupBasicFormValidation();
+        
+        // Esperar un poco más para que el DOM esté completamente listo
+        setTimeout(() => {
+            console.log('Iniciando mapa después del delay...');
+            initMap();
+        }, 1000);
+        
+        // Manejar redimensionamiento de ventana
+        let resizeTimeout;
+        window.addEventListener('resize', function() {
+            clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(() => {
+                if (map && isMapInitialized) {
+                    console.log('Redimensionando mapa...');
+                    map.invalidateSize();
+                }
+            }, 300);
+        });
+        
+        console.log('Aplicación inicializada correctamente');
+        
+    } catch (error) {
+        console.error('Error inicializando aplicación:', error);
+    }
+}
+
+// Configuración básica del contador de caracteres
+function setupCharacterCounter() {
+    const titleInput = document.getElementById('titulo');
+    const counter = document.getElementById('titleCount');
+    
+    if (titleInput && counter) {
+        titleInput.addEventListener('input', function() {
+            const length = this.value.length;
+            counter.textContent = length;
+            
+            if (length > 90) {
+                counter.style.color = '#dc3545';
+            } else if (length > 75) {
+                counter.style.color = '#ffc107';
+            } else {
+                counter.style.color = '#6c757d';
+            }
+        });
+    }
+}
+
+// Configuración de inputs de coordenadas
+function setupCoordinateInputs() {
+    const latInput = document.getElementById('latitud');
+    const lngInput = document.getElementById('longitud');
+    
+    if (latInput && lngInput) {
+        [latInput, lngInput].forEach(input => {
+            input.addEventListener('input', function() {
+                const lat = parseFloat(latInput.value);
+                const lng = parseFloat(lngInput.value);
+                
+                // Actualizar mapa si las coordenadas son válidas
+                if (isMapInitialized && map && isValidCoordinate(lat, lng)) {
+                    clearTimeout(input.updateTimeout);
+                    input.updateTimeout = setTimeout(() => {
+                        map.setView([lat, lng], map.getZoom());
+                        marker.setLatLng([lat, lng]);
+                    }, 1000);
+                }
+            });
+        });
+    }
+}
+
+// Validación básica del formulario
+function setupBasicFormValidation() {
+    const form = document.querySelector('form');
+    
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            const lat = parseFloat(document.getElementById('latitud').value);
+            const lng = parseFloat(document.getElementById('longitud').value);
+            
+            if (!isValidCoordinate(lat, lng)) {
+                e.preventDefault();
+                alert('Las coordenadas ingresadas no son válidas. Latitud debe estar entre -90 y 90, Longitud entre -180 y 180.');
+                return false;
+            }
+            
+            // Mostrar estado de carga en el botón
+            const submitBtn = document.getElementById('submitBtn');
+            if (submitBtn) {
+                submitBtn.innerHTML = '<div class="spinner-border spinner-border-sm"></div> Guardando...';
+                submitBtn.disabled = true;
+            }
+        });
+    }
+}
+
+// Inicializar cuando el DOM esté listo
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('DOM listo, inicializando...');
+    initializeApp();
+});
+
+// Asegurar que Leaflet esté cargado
+if (typeof L === 'undefined') {
+    console.error('Leaflet no está cargado');
+} else {
+    console.log('Leaflet cargado correctamente');
+}
 </script>
 {% endblock %}
