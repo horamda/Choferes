@@ -2174,6 +2174,11 @@ def marcar_asistencia():
     if not (hora_reunion_dt - ventana_tolerancia <= ahora <= hora_reunion_dt + ventana_tolerancia):
         cursor.close(); conn.close()
         return jsonify({"error": "⏰ Fuera del horario permitido"}), 403
+    
+    logger.info(f"[DEBUG GEO] Reunión ID: {reunion_id}")
+    logger.info(f"[DEBUG GEO] Coordenadas REUNIÓN: lat={latitud_db}, lon={longitud_db}")
+    logger.info(f"[DEBUG GEO] Coordenadas USUARIO: lat={lat}, lon={lon}")
+    logger.info(f"[DEBUG GEO] Distancia calculada: {distancia:.2f} m")
 
     # Validar ubicación
     distancia = geodesic((lat, lon), (latitud_db, longitud_db)).meters

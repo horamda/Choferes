@@ -8,6 +8,6 @@ MYSQL_CONFIG = {
     'use_pure': True,
     'port': 3306  # Asegurate de que esté este puerto si tu proveedor lo usa
 }
-RADIO_VALIDACION_METROS = 1000
+RADIO_VALIDACION_METROS = 50000
 TOLERANCIA_MINUTOS_REUNION = 120
 
