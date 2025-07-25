@@ -2131,10 +2131,21 @@ def nueva_reunion_admin():
 @app.route('/api/marcar_asistencia', methods=['POST'])
 def marcar_asistencia():
     data = request.get_json()
-    reunion_id = data.get('reunion_id')
+
+    # Validación inicial
     dni = data.get('dni')
-    lat = float(data.get('lat'))
-    lon = float(data.get('lon'))
+    reunion_id = data.get('reunion_id')
+    lat_raw = data.get('lat')
+    lon_raw = data.get('lon')
+
+    if dni is None or reunion_id is None or lat_raw is None or lon_raw is None:
+        return jsonify({"error": "❌ Faltan datos obligatorios: dni, reunion_id, lat, lon"}), 400
+
+    try:
+        lat = float(lat_raw)
+        lon = float(lon_raw)
+    except ValueError:
+        return jsonify({"error": "❌ Coordenadas inválidas"}), 400
 
     ventana_tolerancia = timedelta(minutes=TOLERANCIA_MINUTOS_REUNION)
 
@@ -2174,14 +2185,14 @@ def marcar_asistencia():
     if not (hora_reunion_dt - ventana_tolerancia <= ahora <= hora_reunion_dt + ventana_tolerancia):
         cursor.close(); conn.close()
         return jsonify({"error": "⏰ Fuera del horario permitido"}), 403
-    
+
+    # Validar ubicación
+    distancia = geodesic((lat, lon), (latitud_db, longitud_db)).meters
     logger.info(f"[DEBUG GEO] Reunión ID: {reunion_id}")
     logger.info(f"[DEBUG GEO] Coordenadas REUNIÓN: lat={latitud_db}, lon={longitud_db}")
     logger.info(f"[DEBUG GEO] Coordenadas USUARIO: lat={lat}, lon={lon}")
     logger.info(f"[DEBUG GEO] Distancia calculada: {distancia:.2f} m")
 
-    # Validar ubicación
-    distancia = geodesic((lat, lon), (latitud_db, longitud_db)).meters
     if distancia > RADIO_VALIDACION_METROS:
         cursor.close(); conn.close()
         return jsonify({"error": f"📍 Ubicación fuera del rango permitido ({distancia:.1f}m)"}), 403
@@ -2208,6 +2219,7 @@ def marcar_asistencia():
     conn.close()
 
     return jsonify({"mensaje": "🟢 Asistencia registrada correctamente"}), 200
+
 
 
 #EDITAR REUNION
