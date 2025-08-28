@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+
+{% block title %}Editar Objetivo{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+  <h2 class="mb-4">✏️ Editar Objetivo</h2>
+
+  <form method="post" class="card shadow p-4">
+    <div class="mb-3">
+      <label for="anio" class="form-label">📅 Año</label>
+      <input type="number" class="form-control" id="anio" name="anio"
+             value="{{ objetivo.anio }}" required>
+    </div>
+
+      <div class="mb-3">
+      <label class="form-label">Tipo de Objetivo</label>
+      <select name="objetivo_tipo" class="form-select" required>
+        <option value="<=">&le; (menor o igual)</option>
+        <option value=">=">&ge; (mayor o igual)</option>
+        <option value="=">= (igual a)</option>
+      </select>
+    </div>
+
+    <div class="mb-3">
+      <label for="objetivo_valor" class="form-label">🎯 Valor</label>
+      <input type="number" step="0.01" class="form-control" id="objetivo_valor"
+             name="objetivo_valor" value="{{ objetivo.objetivo_valor }}" required>
+    </div>
+
+    <button type="submit" class="btn btn-primary">💾 Guardar Cambios</button>
+    <a href="{{ url_for('editar_indicador', id=objetivo.indicador_id) }}" class="btn btn-secondary">↩️ Volver</a>
+  </form>
+</div>
+{% endblock %}

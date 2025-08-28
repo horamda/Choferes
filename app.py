@@ -23,6 +23,7 @@ from flask import send_file
 from config import RADIO_VALIDACION_METROS, TOLERANCIA_MINUTOS_REUNION
 
 
+
 # Configurar logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -835,95 +836,112 @@ def obtener_sectores():
     return lista
 # ────────────────────────────────────────────────────────────
 
-
 # ╭───────────────────────── LISTADO ─────────────────────────╮
 @app.route('/admin/indicadores', methods=['GET'])
 @login_required
 def admin_indicadores():
     sector_id = request.args.get('sector_id', type=int)
-
     conn   = get_connection()
     cursor = conn.cursor(dictionary=True)
 
-    # 1) Sectores verdaderos
-    sectores, mapa_id_nombre = cargar_sectores(cursor)
+    # Sectores
+    sectores, _ = cargar_sectores(cursor)
 
-    # 2) Indicadores (filtrados o no)
+    # Indicadores + sector + objetivo vigente + (tipo/color/fill)
+    query = """
+        SELECT i.id, i.nombre, i.sector_id, i.activo,
+               i.tipo_grafico, i.color_grafico, i.fill_grafico,
+               s.nombre AS sector_nombre,
+               o.objetivo_tipo, o.objetivo_valor
+          FROM indicadores i
+          JOIN sectores s ON s.id = i.sector_id
+     LEFT JOIN objetivos_indicadores o
+            ON o.indicador_id = i.id AND o.anio = %s
+    """
+    params = [datetime.now().year]
+
     if sector_id:
-        cursor.execute("""
-            SELECT i.*, %s AS sector_nombre
-              FROM indicadores i
-             WHERE i.sector_id = %s
-        """, (mapa_id_nombre.get(sector_id, 'Desconocido'), sector_id))
-    else:
-        cursor.execute("SELECT *, NULL AS sector_nombre FROM indicadores")
+        query += " WHERE i.sector_id = %s"
+        params.append(sector_id)
 
+    query += " ORDER BY s.nombre, i.nombre"
+    cursor.execute(query, tuple(params))
     indicadores = cursor.fetchall()
-
-    # 3) Añadir nombre si no se filtró
-    if not sector_id:
-        for ind in indicadores:
-            ind['sector_nombre'] = mapa_id_nombre.get(ind['sector_id'], 'Desconocido')
 
     cursor.close(); conn.close()
 
     return render_template(
         "admin_indicadores.html",
-        indicadores = indicadores,
-        sectores    = sectores,   # ← lista real para el combo
-        sector_id   = sector_id
+        indicadores=indicadores,
+        sectores=sectores,
+        sector_id=sector_id,
+        current_year=datetime.now().year
     )
 # ╰───────────────────────────────────────────────────────────╯
 
 
-
 # ╭───────────────────────── ALTA ────────────────────────────╮
-# Si NO usas Blueprint, cambia admin_bp por app
-# admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
-
-
-
 @app.route('/admin/indicadores/nuevo', methods=['GET', 'POST'])
 @login_required
 def nuevo_indicador():
     sectores = obtener_sectores()
-    form = {"nombre": "", "sector_id": "", "activo": "1"}
+    form = {
+        "nombre": "",
+        "sector_id": "",
+        "activo": "1",
+        "tipo_grafico": "",
+        "color_grafico": "",
+        "fill_grafico": ""  # checkbox
+    }
 
     if request.method == 'POST':
-        form["nombre"]    = request.form['nombre'].strip().upper()
-        form["sector_id"] = request.form['sector_id']
-        form["activo"]    = request.form['activo']
+        form["nombre"]        = request.form.get('nombre', '').strip().upper()
+        form["sector_id"]     = request.form.get('sector_id') or ""
+        form["activo"]        = request.form.get('activo') or "0"
+        form["tipo_grafico"]  = (request.form.get('tipo_grafico') or '').strip() or None
+        color_hex = (request.form.get('color_grafico') or '').strip()
+        form["color_grafico"] = color_hex if color_hex else None
+        # checkbox: 'on' si marcado, None si no
+        fill = request.form.get('fill_grafico')
+        form["fill_grafico"]  = 1 if fill else None  # None = no definido
 
-        if not form["sector_id"]:
+        if not form["nombre"]:
+            flash("❌ El nombre es obligatorio.", "danger")
+        elif not form["sector_id"]:
             flash("❌ Debe seleccionar un sector.", "danger")
-            return render_template('nuevo_indicador.html',
-                                   sectores=sectores, form=form)
-
-        conn   = get_connection()
-        cur    = conn.cursor()
-
-        cur.execute("""
-            SELECT 1 FROM indicadores
-             WHERE LOWER(nombre)=%s AND sector_id=%s
-        """, (form["nombre"].lower(), int(form["sector_id"])))
-        if cur.fetchone():
-            flash("❌ Ya existe un indicador con ese nombre en ese sector.", "danger")
         else:
+            conn = get_connection()
+            cur  = conn.cursor()
+
+            # validar duplicado por nombre+sector
             cur.execute("""
-                INSERT INTO indicadores (nombre, sector_id, activo)
-                VALUES (%s, %s, %s)
-            """, (form["nombre"], int(form["sector_id"]), int(form["activo"])))
-            conn.commit()
-            flash("✅ Indicador creado correctamente.", "success")
+                SELECT 1 FROM indicadores
+                 WHERE LOWER(nombre)=%s AND sector_id=%s
+            """, (form["nombre"].lower(), int(form["sector_id"])))
+            if cur.fetchone():
+                flash("❌ Ya existe un indicador con ese nombre en ese sector.", "danger")
+            else:
+                cur.execute("""
+                    INSERT INTO indicadores
+                        (nombre, sector_id, activo, tipo_grafico, color_grafico, fill_grafico)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                """, (
+                    form["nombre"], int(form["sector_id"]), int(form["activo"]),
+                    form["tipo_grafico"], form["color_grafico"], form["fill_grafico"]
+                ))
+                conn.commit()
+                flash("✅ Indicador creado correctamente.", "success")
+                cur.close(); conn.close()
+                return redirect(url_for('admin_indicadores'))
+
             cur.close(); conn.close()
-            return redirect(url_for('admin_indicadores'))   # ← aquí
 
-        cur.close(); conn.close()
-
-    return render_template('nuevo_indicador.html',
-                           sectores=sectores, form=form)
+    return render_template(
+        'nuevo_indicador.html',
+        sectores=sectores, form=form,
+        current_year=datetime.now().year
+    )
 # ╰───────────────────────────────────────────────────────────╯
-
 
 
 # ╭───────────────────────── EDICIÓN ─────────────────────────╮
@@ -931,16 +949,20 @@ def nuevo_indicador():
 @login_required
 def editar_indicador(id):
     sectores = obtener_sectores()
-
     conn   = get_connection()
     cursor = conn.cursor(dictionary=True)
 
     if request.method == 'POST':
-        nombre     = request.form['nombre'].strip().upper()
-        sector_id  = int(request.form['sector_id'])
-        activo     = int(request.form['activo'])
+        nombre        = request.form.get('nombre', '').strip().upper()
+        sector_id     = int(request.form.get('sector_id'))
+        activo        = int(request.form.get('activo'))
 
-        # Verificar duplicado (mismo nombre y sector, distinto id)
+        tipo_grafico  = (request.form.get('tipo_grafico') or '').strip() or None
+        color_hex     = (request.form.get('color_grafico') or '').strip()
+        color_grafico = color_hex if color_hex else None
+        fill_grafico  = 1 if request.form.get('fill_grafico') else None  # None = sin definir
+
+        # Duplicado en el mismo sector (excluyendo el actual)
         cursor.execute("""
             SELECT id FROM indicadores
              WHERE LOWER(nombre) = %s
@@ -952,39 +974,51 @@ def editar_indicador(id):
         else:
             cursor.execute("""
                 UPDATE indicadores
-                   SET nombre = %s,
-                       sector_id = %s,
-                       activo = %s
-                 WHERE id = %s
-            """, (nombre, sector_id, activo, id))
+                   SET nombre=%s, sector_id=%s, activo=%s,
+                       tipo_grafico=%s, color_grafico=%s, fill_grafico=%s
+                 WHERE id=%s
+            """, (nombre, sector_id, activo,
+                  tipo_grafico, color_grafico, fill_grafico, id))
             conn.commit()
             flash("✅ Indicador actualizado correctamente.", "success")
             cursor.close(); conn.close()
             return redirect(url_for('admin_indicadores'))
 
-    # GET – cargar registro
-    cursor.execute("SELECT * FROM indicadores WHERE id = %s", (id,))
+    # GET: cargar indicador
+    cursor.execute("SELECT * FROM indicadores WHERE id=%s", (id,))
     indicador = cursor.fetchone()
-    cursor.close(); conn.close()
-
     if not indicador:
+        cursor.close(); conn.close()
         flash("❌ Indicador no encontrado.", "danger")
         return redirect(url_for('admin_indicadores'))
 
-    return render_template("editar_indicador.html",
-                           indicador=indicador,
-                           sectores =sectores)
+    # GET: objetivos del indicador
+    cursor.execute("""
+        SELECT id, indicador_id, anio, objetivo_tipo, objetivo_valor
+          FROM objetivos_indicadores
+         WHERE indicador_id=%s
+         ORDER BY anio DESC
+    """, (id,))
+    objetivos = cursor.fetchall()
+    cursor.close(); conn.close()
+
+    return render_template(
+        "editar_indicador.html",
+        indicador=indicador,
+        sectores=sectores,
+        objetivos=objetivos,
+        current_year=datetime.now().year
+    )
 # ╰───────────────────────────────────────────────────────────╯
 
-# ─────────────────────────── TOGGLE indicador ──────────────────────────
-#  Activa ⇆ Inactiva un indicador y vuelve a la lista conservando filtros
+
+# ╭───────────────────────── TOGGLE ─────────────────────────╮
 @app.route('/admin/indicadores/toggle/<int:id>', methods=['POST'])
 @login_required
 def toggle_indicador(id):
     conn   = get_connection()
     cursor = conn.cursor()
 
-    # invertir el campo activo (0→1  /  1→0)
     cursor.execute("""
         UPDATE indicadores
            SET activo = NOT activo
@@ -993,9 +1027,98 @@ def toggle_indicador(id):
     conn.commit()
 
     cursor.close(); conn.close()
-
-    # redirige a la página de la que vino (mantiene ?sector_id=… si existía)
     return redirect(request.referrer or url_for('admin_indicadores'))
+# ╰───────────────────────────────────────────────────────────╯
+
+# ╭───────────────────────── CRUD OBJETIVOS ─────────────────────────╮
+@app.route('/admin/objetivos/nuevo/<int:indicador_id>', methods=['GET', 'POST'])
+@login_required
+def nuevo_objetivo(indicador_id):
+    conn   = get_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    # Verificar que el indicador existe
+    cursor.execute("SELECT * FROM indicadores WHERE id = %s", (indicador_id,))
+    indicador = cursor.fetchone()
+    if not indicador:
+        flash("❌ Indicador no encontrado.", "danger")
+        return redirect(url_for('admin_indicadores'))
+
+    if request.method == 'POST':
+        anio          = request.form['anio']
+        objetivo_tipo = request.form['objetivo_tipo']
+        objetivo_valor = request.form['objetivo_valor']
+
+        cursor.execute("""
+            INSERT INTO objetivos_indicadores (indicador_id, anio, objetivo_tipo, objetivo_valor)
+            VALUES (%s, %s, %s, %s)
+        """, (indicador_id, anio, objetivo_tipo, objetivo_valor))
+        conn.commit()
+
+        flash("✅ Objetivo agregado correctamente.", "success")
+        cursor.close(); conn.close()
+        return redirect(url_for('editar_indicador', id=indicador_id))
+
+    cursor.close(); conn.close()
+    return render_template("nuevo_objetivo.html", indicador=indicador)
+
+
+@app.route('/admin/objetivos/editar/<int:id>', methods=['GET', 'POST'])
+@login_required
+def editar_objetivo(id):
+    conn   = get_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute("SELECT * FROM objetivos_indicadores WHERE id = %s", (id,))
+    objetivo = cursor.fetchone()
+
+    if not objetivo:
+        flash("❌ Objetivo no encontrado.", "danger")
+        return redirect(url_for('admin_indicadores'))
+
+    if request.method == 'POST':
+        anio          = request.form['anio']
+        objetivo_tipo = request.form['objetivo_tipo']
+        objetivo_valor = request.form['objetivo_valor']
+
+        cursor.execute("""
+            UPDATE objetivos_indicadores
+               SET anio = %s, objetivo_tipo = %s, objetivo_valor = %s
+             WHERE id = %s
+        """, (anio, objetivo_tipo, objetivo_valor, id))
+        conn.commit()
+
+        flash("✅ Objetivo actualizado correctamente.", "success")
+        cursor.close(); conn.close()
+        return redirect(url_for('editar_indicador', id=objetivo['indicador_id']))
+
+    cursor.close(); conn.close()
+    return render_template("editar_objetivo.html", objetivo=objetivo)
+
+
+@app.route('/admin/objetivos/eliminar/<int:id>', methods=['POST'])
+@login_required
+def eliminar_objetivo(id):
+    conn   = get_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute("SELECT indicador_id FROM objetivos_indicadores WHERE id = %s", (id,))
+    objetivo = cursor.fetchone()
+
+    if not objetivo:
+        flash("❌ Objetivo no encontrado.", "danger")
+        return redirect(url_for('admin_indicadores'))
+
+    indicador_id = objetivo['indicador_id']
+
+    cursor.execute("DELETE FROM objetivos_indicadores WHERE id = %s", (id,))
+    conn.commit()
+
+    flash("🗑️ Objetivo eliminado.", "warning")
+    cursor.close(); conn.close()
+    return redirect(url_for('editar_indicador', id=indicador_id))
+# ╰───────────────────────────────────────────────────────────╯
+
 
 @app.route('/registrar_token', methods=['POST'])
 def registrar_token():
@@ -2132,7 +2255,6 @@ def nueva_reunion_admin():
 def marcar_asistencia():
     data = request.get_json()
 
-    # Validación inicial
     dni = data.get('dni')
     reunion_id = data.get('reunion_id')
     lat_raw = data.get('lat')
@@ -2152,7 +2274,6 @@ def marcar_asistencia():
     conn = get_connection()
     cursor = conn.cursor()
 
-    # Buscar la reunión
     cursor.execute("""
         SELECT dia_semana, hora, latitud, longitud
         FROM reuniones
@@ -2172,30 +2293,43 @@ def marcar_asistencia():
 
     ahora = datetime.now()
 
-    # Validar día
+    # ✅ Validar día
     if ahora.weekday() != dia_semana:
+        mensaje = f"📅 Día incorrecto: hoy={ahora.weekday()} esperado={dia_semana}"
+        print(mensaje)
+        logger.warning(mensaje)
         cursor.close(); conn.close()
-        return jsonify({"error": "📅 No es el día programado para la reunión"}), 403
+        return jsonify({"error": mensaje}), 403
 
-    # Validar horario (± tolerancia)
+    # ✅ Validar horario
     hora_reunion_dt = datetime.combine(
         ahora.date(),
         datetime.strptime(str(hora_reunion), "%H:%M:%S").time()
     )
-    if not (hora_reunion_dt - ventana_tolerancia <= ahora <= hora_reunion_dt + ventana_tolerancia):
+    dentro_de_horario = (hora_reunion_dt - ventana_tolerancia <= ahora <= hora_reunion_dt + ventana_tolerancia)
+    if not dentro_de_horario:
+        mensaje = f"⏰ Fuera del horario permitido. Ahora={ahora.time()}, reunión={hora_reunion}, tolerancia=±{TOLERANCIA_MINUTOS_REUNION}min"
+        print(mensaje)
+        logger.warning(mensaje)
         cursor.close(); conn.close()
-        return jsonify({"error": "⏰ Fuera del horario permitido"}), 403
+        return jsonify({"error": mensaje}), 403
 
-    # Validar ubicación
+    # ✅ Validar ubicación
     distancia = geodesic((lat, lon), (latitud_db, longitud_db)).meters
-    logger.info(f"[DEBUG GEO] Reunión ID: {reunion_id}")
-    logger.info(f"[DEBUG GEO] Coordenadas REUNIÓN: lat={latitud_db}, lon={longitud_db}")
-    logger.info(f"[DEBUG GEO] Coordenadas USUARIO: lat={lat}, lon={lon}")
-    logger.info(f"[DEBUG GEO] Distancia calculada: {distancia:.2f} m")
+    mensaje_geo = (
+        f"📍 Ubicación usuario: ({lat}, {lon})\n"
+        f"📍 Ubicación reunión: ({latitud_db}, {longitud_db})\n"
+        f"📏 Distancia: {distancia:.2f} m / Permitido: {RADIO_VALIDACION_METROS} m"
+    )
+    print(mensaje_geo)
+    logger.info(mensaje_geo)
 
     if distancia > RADIO_VALIDACION_METROS:
+        mensaje = f"📍 Fuera del rango permitido: distancia={distancia:.1f}m"
+        print(mensaje)
+        logger.warning(mensaje)
         cursor.close(); conn.close()
-        return jsonify({"error": f"📍 Ubicación fuera del rango permitido ({distancia:.1f}m)"}), 403
+        return jsonify({"error": mensaje}), 403
 
     # Validar asistencia previa
     fecha_actual = ahora.date()
@@ -2780,6 +2914,341 @@ def asignacion_editar(id_asignacion):
         reuniones=reuniones
     )
 
+@app.route("/admin/gastos")
+def admin_gastos():
+    return render_template("gastos/gastos_list.html")
+
+@app.route("/admin/ordenes")
+def admin_ordenes():
+    return render_template("gastos/gastos_list.html")
+@app.route('/indicadores/eliminar/<int:id>', methods=['POST', 'GET'])
+@login_required
+def eliminar_indicador(id):
+    try:
+        cur = mysql.connection.cursor()
+        cur.execute("DELETE FROM indicadores WHERE id = %s", (id,))
+        mysql.connection.commit()
+        flash("Indicador eliminado correctamente", "success")
+    except Exception as e:
+        flash(f"Error al eliminar indicador: {e}", "danger")
+    finally:
+        cur.close()
+    return redirect(url_for('admin_indicadores'))
+
+
+# ---------------CRUD RUBROS ------------------#
+@app.route("/admin/rubros")
+@login_required
+def admin_rubros():
+    conn = get_connection()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("SELECT * FROM rubros ORDER BY id DESC")
+    rubros = cursor.fetchall()
+    cursor.close(); conn.close()
+    return render_template("rubros/rubros_list.html", rubros=rubros)
+# ─────────────── GET todos ──────────────
+@app.route('/api/rubros', methods=['GET'])
+def get_rubros():
+    conn = get_connection()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("SELECT * FROM rubros")
+    rubros = cursor.fetchall()
+    cursor.close(); conn.close()
+    return jsonify(rubros)
+
+# ─────────────── GET por ID ───────────────
+@app.route('/api/rubros/<int:id>', methods=['GET'])
+def get_rubro(id):
+    conn = get_connection()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("SELECT * FROM rubros WHERE id = %s", (id,))
+    rubro = cursor.fetchone()
+    cursor.close(); conn.close()
+    return jsonify(rubro) if rubro else ('', 404)
+
+# ─────────────── POST crear ───────────────
+@app.route('/api/rubros', methods=['POST'])
+def create_rubro():
+    data = request.json
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("INSERT INTO rubros (nombre, descripcion) VALUES (%s, %s)", 
+                   (data['nombre'], data.get('descripcion')))
+    conn.commit()
+    cursor.close(); conn.close()
+    return jsonify({'message': 'Rubro creado correctamente'}), 201
+
+# ─────────────── PUT actualizar ───────────────
+@app.route('/api/rubros/<int:id>', methods=['PUT'])
+def update_rubro(id):
+    data = request.json
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        UPDATE rubros 
+        SET nombre = %s, descripcion = %s 
+        WHERE id = %s
+    """, (data['nombre'], data.get('descripcion'), id))
+    conn.commit()
+    cursor.close(); conn.close()
+    return jsonify({'message': 'Rubro actualizado correctamente'})
+
+# ─────────────── DELETE eliminar ───────────────
+@app.route('/api/rubros/<int:id>', methods=['DELETE'])
+def delete_rubro(id):
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM rubros WHERE id = %s", (id,))
+    conn.commit()
+    cursor.close(); conn.close()
+    return jsonify({'message': 'Rubro eliminado correctamente'})
+
+# -----------------------------
+# CRUD Proveedores (API REST)
+# -----------------------------
+
+# ✅ Listar todos los proveedores con JOIN a rubros
+@app.route('/api/proveedores', methods=['GET'])
+def get_proveedores():
+    conn = get_connection()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("""
+        SELECT p.id, p.nombre, p.cuit, p.localidad, p.provincia, p.direccion,
+               p.telefono, p.atencion_por, p.nivel_servicio,
+               r.id AS rubro_id, r.nombre AS rubro_nombre
+        FROM proveedores p
+        LEFT JOIN rubros r ON p.rubro_id = r.id
+        ORDER BY p.nombre
+    """)
+    proveedores = cursor.fetchall()
+    cursor.close(); conn.close()
+    return jsonify(proveedores)
+
+
+# ✅ Obtener un proveedor por ID
+@app.route('/api/proveedores/<int:id>', methods=['GET'])
+def get_proveedor(id):
+    conn = get_connection()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("""
+        SELECT p.id, p.nombre, p.cuit, p.localidad, p.provincia, p.direccion,
+               p.telefono, p.atencion_por, p.nivel_servicio,
+               r.id AS rubro_id, r.nombre AS rubro_nombre
+        FROM proveedores p
+        LEFT JOIN rubros r ON p.rubro_id = r.id
+        WHERE p.id = %s
+    """, (id,))
+    proveedor = cursor.fetchone()
+    cursor.close(); conn.close()
+    return jsonify(proveedor) if proveedor else ('', 404)
+
+
+# ✅ Crear proveedor
+@app.route('/api/proveedores', methods=['POST'])
+def create_proveedor():
+    data = request.json
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO proveedores
+        (nombre, cuit, rubro_id, localidad, provincia, direccion, telefono, atencion_por, nivel_servicio)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+    """, (
+        data['nombre'], data.get('cuit'), data.get('rubro_id'),
+        data.get('localidad'), data.get('provincia'), data.get('direccion'),
+        data.get('telefono'), data.get('atencion_por'),
+        data.get('nivel_servicio', 0.00)
+    ))
+    conn.commit()
+    new_id = cursor.lastrowid
+    cursor.close(); conn.close()
+    return jsonify({'message': 'Proveedor creado correctamente', 'id': new_id}), 201
+
+
+# ✅ Actualizar proveedor
+@app.route('/api/proveedores/<int:id>', methods=['PUT'])
+def update_proveedor(id):
+    data = request.json
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        UPDATE proveedores
+        SET nombre=%s, cuit=%s, rubro_id=%s, localidad=%s, provincia=%s,
+            direccion=%s, telefono=%s, atencion_por=%s, nivel_servicio=%s
+        WHERE id=%s
+    """, (
+        data['nombre'], data.get('cuit'), data.get('rubro_id'),
+        data.get('localidad'), data.get('provincia'), data.get('direccion'),
+        data.get('telefono'), data.get('atencion_por'),
+        data.get('nivel_servicio', 0.00), id
+    ))
+    conn.commit()
+    cursor.close(); conn.close()
+    return jsonify({'message': 'Proveedor actualizado correctamente'})
+
+
+# ✅ Eliminar proveedor
+@app.route('/api/proveedores/<int:id>', methods=['DELETE'])
+def delete_proveedor(id):
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM proveedores WHERE id=%s", (id,))
+    conn.commit()
+    cursor.close(); conn.close()
+    return jsonify({'message': 'Proveedor eliminado correctamente'})
+
+from flask import render_template, request, redirect, url_for, flash
+from contextlib import closing
+
+# 🔹 Utilidad para obtener rubros
+def get_rubros():
+    conn = get_connection()
+    with closing(conn.cursor(dictionary=True)) as cursor:
+        cursor.execute("SELECT * FROM rubros ORDER BY nombre")
+        rubros = cursor.fetchall()
+    conn.close()
+    return rubros
+
+
+from flask import render_template, request, redirect, url_for, flash
+from contextlib import closing
+
+# ============================
+#   LISTAR PROVEEDORES
+# ============================
+@app.route("/admin/proveedores")
+def admin_proveedores():
+    conn = get_connection()
+    with closing(conn.cursor(dictionary=True)) as cursor:
+        cursor.execute("""
+            SELECT p.id, p.nombre, p.cuit, p.localidad, p.provincia, p.direccion,
+                   p.telefono, p.email, p.sitio_web, p.codigo_postal,
+                   p.atencion_por, p.nivel_servicio, p.observaciones, p.activo,
+                   r.nombre AS rubro_nombre
+            FROM proveedores p
+            LEFT JOIN rubros r ON p.rubro_id = r.id
+            ORDER BY p.nombre
+        """)
+        proveedores = cursor.fetchall()
+    conn.close()
+    return render_template("proveedores/proveedores_list.html", proveedores=proveedores)
+
+
+# ============================
+#   CREAR PROVEEDOR
+# ============================
+@app.route("/admin/proveedores/new", methods=["GET", "POST"])
+def create_proveedor_form():
+    if request.method == "POST":
+        data = request.form
+        try:
+            conn = get_connection()
+            with closing(conn.cursor()) as cursor:
+                cursor.execute("""
+                    INSERT INTO proveedores
+                        (nombre, cuit, rubro_id, localidad, provincia, direccion, telefono,
+                         email, sitio_web, codigo_postal, atencion_por, nivel_servicio,
+                         observaciones, activo)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                """, (
+                    data.get("nombre"), data.get("cuit"), data.get("rubro_id"),
+                    data.get("localidad"), data.get("provincia"), data.get("direccion"),
+                    data.get("telefono"), data.get("email"), data.get("sitio_web"),
+                    data.get("codigo_postal"), data.get("atencion_por"),
+                    data.get("nivel_servicio", 0.00),
+                    data.get("observaciones"),
+                    1 if data.get("activo") else 0
+                ))
+                conn.commit()
+            flash("✅ Proveedor creado correctamente", "success")
+        except Exception as e:
+            conn.rollback()
+            flash(f"❌ Error al crear proveedor: {e}", "danger")
+        finally:
+            conn.close()
+        return redirect(url_for("admin_proveedores"))
+
+    rubros = get_rubros()
+    return render_template("proveedores/proveedores_new.html", rubros=rubros)
+
+
+# ============================
+#   EDITAR PROVEEDOR
+# ============================
+@app.route("/admin/proveedores/<int:id>/edit", methods=["GET", "POST"])
+def update_proveedor_form(id):
+    conn = get_connection()
+    if request.method == "POST":
+        data = request.form
+        try:
+            with closing(conn.cursor()) as cursor:
+                cursor.execute("""
+                    UPDATE proveedores
+                    SET nombre=%s, cuit=%s, rubro_id=%s, localidad=%s, provincia=%s,
+                        direccion=%s, telefono=%s, email=%s, sitio_web=%s, codigo_postal=%s,
+                        atencion_por=%s, nivel_servicio=%s, observaciones=%s, activo=%s
+                    WHERE id=%s
+                """, (
+                    data.get("nombre"), data.get("cuit"), data.get("rubro_id"),
+                    data.get("localidad"), data.get("provincia"), data.get("direccion"),
+                    data.get("telefono"), data.get("email"), data.get("sitio_web"),
+                    data.get("codigo_postal"), data.get("atencion_por"),
+                    data.get("nivel_servicio", 0.00),
+                    data.get("observaciones"),
+                    1 if data.get("activo") else 0,
+                    id
+                ))
+                conn.commit()
+            flash("✅ Proveedor actualizado correctamente", "success")
+        except Exception as e:
+            conn.rollback()
+            flash(f"❌ Error al actualizar proveedor: {e}", "danger")
+        finally:
+            conn.close()
+        return redirect(url_for("admin_proveedores"))
+
+    with closing(conn.cursor(dictionary=True)) as cursor:
+        cursor.execute("SELECT * FROM proveedores WHERE id=%s", (id,))
+        proveedor = cursor.fetchone()
+    conn.close()
+
+    if not proveedor:
+        flash("⚠️ Proveedor no encontrado", "warning")
+        return redirect(url_for("admin_proveedores"))
+
+    rubros = get_rubros()
+    return render_template("proveedores/proveedores_edit.html", proveedor=proveedor, rubros=rubros)
+
+
+# ============================
+#   ELIMINAR PROVEEDOR
+# ============================
+@app.route("/admin/proveedores/<int:id>/delete", methods=["GET", "POST"])
+def delete_proveedor_form(id):
+    conn = get_connection()
+    if request.method == "POST":
+        try:
+            with closing(conn.cursor()) as cursor:
+                cursor.execute("DELETE FROM proveedores WHERE id=%s", (id,))
+                conn.commit()
+            flash("✅ Proveedor eliminado correctamente", "success")
+        except Exception as e:
+            conn.rollback()
+            flash(f"❌ Error al eliminar proveedor: {e}", "danger")
+        finally:
+            conn.close()
+        return redirect(url_for("admin_proveedores"))
+
+    with closing(conn.cursor(dictionary=True)) as cursor:
+        cursor.execute("SELECT * FROM proveedores WHERE id=%s", (id,))
+        proveedor = cursor.fetchone()
+    conn.close()
+
+    if not proveedor:
+        flash("⚠️ Proveedor no encontrado", "warning")
+        return redirect(url_for("admin_proveedores"))
+
+    return render_template("proveedores/proveedores_delete.html", proveedor=proveedor)
 
 
 

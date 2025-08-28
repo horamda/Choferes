@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+
+{% block title %}Gastos de Mantenimiento{% endblock %}
+
+{% block content %}
+<h2>💰 Gastos de Mantenimiento</h2>
+<a href="#" class="btn btn-primary mb-3" onclick="abrirFormularioGasto()">➕ Nuevo Gasto</a>
+
+<table class="table table-bordered" id="tablaGastos">
+    <thead class="thead-dark">
+        <tr>
+            <th>ID</th>
+            <th>Proveedor</th>
+            <th>Rubro</th>
+            <th>Fecha</th>
+            <th>Monto</th>
+            <th>Descripción</th>
+            <th>Acciones</th>
+        </tr>
+    </thead>
+    <tbody></tbody>
+</table>
+
+<!-- Modal gasto -->
+<div class="modal fade" id="gastoModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form id="formGasto">
+        <div class="modal-header">
+          <h5 class="modal-title">Gasto</h5>
+          <button type="button" class="close" data-dismiss="modal">&times;</button>
+        </div>
+        <div class="modal-body">
+            <input type="hidden" id="gastoId">
+            <div class="form-group"><label>Proveedor ID</label><input type="number" id="proveedor_id" class="form-control" required></div>
+            <div class="form-group"><label>Rubro ID</label><input type="number" id="rubro_id" class="form-control" required></div>
+            <div class="form-group"><label>Fecha</label><input type="date" id="fecha" class="form-control" required></div>
+            <div class="form-group"><label>Monto</label><input type="number" step="0.01" id="monto" class="form-control" required></div>
+            <div class="form-group"><label>Descripción</label><input type="text" id="descripcion" class="form-control"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="submit" class="btn btn-success">Guardar</button>
+          <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+const API_GASTOS = "/api/gastos";
+
+document.addEventListener("DOMContentLoaded", () => {
+    cargarGastos();
+    document.getElementById("formGasto").addEventListener("submit", guardarGasto);
+});
+
+function cargarGastos() {
+    fetch(API_GASTOS)
+        .then(r => r.json())
+        .then(data => {
+            const tbody = document.querySelector("#tablaGastos tbody");
+            tbody.innerHTML = "";
+            data.forEach(g => {
+                tbody.innerHTML += `
+                  <tr>
+                    <td>${g.id}</td>
+                    <td>${g.proveedor || g.proveedor_id}</td>
+                    <td>${g.rubro || g.rubro_id}</td>
+                    <td>${g.fecha}</td>
+                    <td>${g.monto}</td>
+                    <td>${g.descripcion || ""}</td>
+                    <td>
+                      <button class="btn btn-sm btn-info" onclick="editarGasto(${g.id})">✏️</button>
+                      <button class="btn btn-sm btn-danger" onclick="eliminarGasto(${g.id})">🗑️</button>
+                    </td>
+                  </tr>`;
+            });
+        });
+}
+
+function abrirFormularioGasto() {
+    document.getElementById("gastoId").value = "";
+    document.getElementById("formGasto").reset();
+    $("#gastoModal").modal("show");
+}
+
+function editarGasto(id) {
+    fetch(`${API_GASTOS}/${id}`)
+        .then(r => r.json())
+        .then(g => {
+            document.getElementById("gastoId").value = g.id;
+            document.getElementById("proveedor_id").value = g.proveedor_id;
+            document.getElementById("rubro_id").value = g.rubro_id;
+            document.getElementById("fecha").value = g.fecha.split("T")[0];
+            document.getElementById("monto").value = g.monto;
+            document.getElementById("descripcion").value = g.descripcion;
+            $("#gastoModal").modal("show");
+        });
+}
+
+function guardarGasto(e) {
+    e.preventDefault();
+    const id = document.getElementById("gastoId").value;
+    const gasto = {
+        proveedor_id: document.getElementById("proveedor_id").value,
+        rubro_id: document.getElementById("rubro_id").value,
+        fecha: document.getElementById("fecha").value,
+        monto: document.getElementById("monto").value,
+        descripcion: document.getElementById("descripcion").value
+    };
+
+    fetch(id ? `${API_GASTOS}/${id}` : API_GASTOS, {
+        method: id ? "PUT" : "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify(gasto)
+    }).then(() => {
+        $("#gastoModal").modal("hide");
+        cargarGastos();
+    });
+}
+
+function eliminarGasto(id) {
+    if (!confirm("¿Eliminar gasto?")) return;
+    fetch(`${API_GASTOS}/${id}`, {method: "DELETE"}).then(() => cargarGastos());
+}
+</script>
+{% endblock %}

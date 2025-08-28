@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Editar Proveedor{% endblock %}
+{% block header %}✏️ Editar Proveedor{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+  <div class="card shadow-sm">
+    <div class="card-body">
+      <form method="POST" action="{{ url_for('update_proveedor_form', id=proveedor.id) }}">
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label">Nombre</label>
+            <input type="text" name="nombre" value="{{ proveedor.nombre }}" class="form-control" required>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">CUIT</label>
+            <input type="text" name="cuit" value="{{ proveedor.cuit }}" class="form-control">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Rubro</label>
+            <select name="rubro_id" class="form-select">
+              {% for r in rubros %}
+              <option value="{{ r.id }}" {% if r.id == proveedor.rubro_id %}selected{% endif %}>{{ r.nombre }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Localidad</label>
+            <input type="text" name="localidad" value="{{ proveedor.localidad }}" class="form-control">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Provincia</label>
+            <input type="text" name="provincia" value="{{ proveedor.provincia }}" class="form-control">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Dirección</label>
+            <input type="text" name="direccion" value="{{ proveedor.direccion }}" class="form-control">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Teléfono</label>
+            <input type="text" name="telefono" value="{{ proveedor.telefono }}" class="form-control">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Atención por</label>
+            <input type="text" name="atencion_por" value="{{ proveedor.atencion_por }}" class="form-control">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Nivel de Servicio (%)</label>
+            <input type="number" step="0.01" name="nivel_servicio" value="{{ proveedor.nivel_servicio }}" class="form-control">
+          </div>
+        </div>
+        <div class="mt-4">
+          <button type="submit" class="btn btn-success">Actualizar</button>
+          <a href="{{ url_for('admin_proveedores') }}" class="btn btn-secondary">Cancelar</a>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

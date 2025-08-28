@@ -1,80 +1,190 @@
 {% extends "base.html" %}
 
 {% block title %}Administrar Indicadores{% endblock %}
-{% block header %}🛠️ Administración de Indicadores{% endblock %}
 
 {% block content %}
 <div class="container mt-4">
+  <h2 class="mb-4">📊 Administración de Indicadores</h2>
 
-  <!-- 1 ▸ Botón “Crear” -->
-  <div class="mb-3 text-end">
-    <a href="{{ url_for('nuevo_indicador') }}" class="btn btn-success">
-      + Crear Indicador
-    </a>
-  </div>
-
-  <!-- 2 ▸ Filtro por sector -->
-  <form method="get" class="row g-3 mb-4">
-    <div class="col-auto">
-      <label for="sector" class="form-label">Filtrar por sector:</label>
-      <select name="sector_id" class="form-select"
-              onchange="this.form.submit()">
-        <option value="">-- Todos --</option>
-        {% for s in sectores %}
-          <option value="{{ s.id }}"
-                  {% if s.id == sector_id %}selected{% endif %}>
-            {{ s.nombre }}
+  <!-- Filtro por sector -->
+  <form method="get" action="{{ url_for('admin_indicadores') }}" class="row g-2 mb-3">
+    <div class="col-12 col-md-6 col-lg-4">
+      <select name="sector_id" class="form-select" onchange="this.form.submit()">
+        <option value="">-- Todos los sectores --</option>
+        {% for sector in sectores %}
+          <option value="{{ sector.id }}" {% if sector_id == sector.id %}selected{% endif %}>
+            {{ sector.nombre }}
           </option>
         {% endfor %}
       </select>
     </div>
+    <div class="col-12 col-md-3 col-lg-2">
+      <a href="{{ url_for('nuevo_indicador') }}" class="btn btn-success w-100">➕ Nuevo Indicador</a>
+    </div>
   </form>
 
-  <!-- 3 ▸ Tabla de indicadores -->
-  <table class="table table-striped table-hover align-middle">
-    <thead>
-      <tr>
-        <th>#</th>
-        <th>Indicador</th>
-        <th>Sector</th>
-        <th>Estado</th>
-        <th class="text-center">Acciones</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for ind in indicadores %}
-      <tr>
-        <td>{{ ind.id }}</td>
-        <td>{{ ind.nombre }}</td>
-        <td>{{ ind.sector_nombre }}</td>
+  <!-- Tabla -->
+  <div class="table-responsive">
+    <table class="table table-striped table-hover align-middle" id="tablaIndicadores">
+      <thead class="table-dark sticky-top">
+        <tr>
+          <th>ID</th>
+          <th>📌 Nombre</th>
+          <th class="col-sector">🏢 Sector</th>
+          <th>✅ Estado</th>
+          <th class="col-objetivo">🎯 Objetivo ({{ current_year }})</th>
+          <th>📈 Tipo gráfico</th>
+          <th>🎨 Color</th>
+          <th>🌊 Relleno</th>
+          <th>⚙️ Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for ind in indicadores %}
+          {% set tg = ind.tipo_grafico or '' %}
+          <tr>
+            <td data-label="ID">{{ ind.id }}</td>
+            <td data-label="Nombre">{{ ind.nombre }}</td>
+            <td data-label="Sector" class="col-sector">{{ ind.sector_nombre }}</td>
 
-        <!-- Estado -->
-        <td>
-          {% if ind.activo %}
-            <span class="badge bg-success">Activo</span>
-          {% else %}
-            <span class="badge bg-secondary">Inactivo</span>
-          {% endif %}
-        </td>
+            <!-- Estado -->
+            <td data-label="Estado">
+              {% if ind.activo %}
+                <span class="badge bg-success">Activo</span>
+              {% else %}
+                <span class="badge bg-secondary">Inactivo</span>
+              {% endif %}
+            </td>
 
-        <!-- Botones -->
-        <td class="d-flex flex-wrap gap-2 justify-content-center">
-          <a href="{{ url_for('editar_indicador', id=ind.id) }}"
-             class="btn btn-sm btn-outline-secondary">
-            Editar
-          </a>
+            <!-- Objetivo -->
+            <td data-label="Objetivo" class="col-objetivo">
+              {% if ind.objetivo_valor is not none %}
+                {{ ind.objetivo_valor }} ({{ ind.objetivo_tipo }})
+              {% else %}
+                <span class="text-muted">Sin objetivo</span>
+              {% endif %}
+            </td>
 
-          <form action="{{ url_for('toggle_indicador', id=ind.id) }}"
-                method="POST" class="d-inline">
-            <button class="btn btn-sm
-                           {{ 'btn-danger' if ind.activo else 'btn-success' }}">
-              {{ 'Desactivar' if ind.activo else 'Activar' }}
-            </button>
-          </form>
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+            <!-- Tipo de gráfico -->
+            <td data-label="Tipo gráfico">
+              {% if tg %}
+                <span class="badge bg-info text-dark">
+                  {% if tg == 'bar' %}Barras{% elif tg == 'line' %}Líneas{% elif tg == 'area' %}Área{% elif tg == 'pie' %}Torta{% elif tg == 'radar' %}Radar{% else %}{{ tg }}{% endif %}
+                </span>
+              {% else %}
+                <span class="text-muted">-</span>
+              {% endif %}
+            </td>
+
+            <!-- Color -->
+            <td data-label="Color">
+              {% if ind.color_grafico %}
+                <span class="color-dot me-2" style="background-color: {{ ind.color_grafico }};"></span>
+                <code class="color-code">{{ ind.color_grafico }}</code>
+              {% else %}
+                <span class="text-muted">-</span>
+              {% endif %}
+            </td>
+
+            <!-- Relleno -->
+            <td data-label="Relleno">
+              {% if ind.fill_grafico is none %}
+                <span class="text-muted">-</span>
+              {% elif ind.fill_grafico %}
+                <span class="badge bg-success">Sí</span>
+              {% else %}
+                <span class="badge bg-danger">No</span>
+              {% endif %}
+            </td>
+
+            <!-- Acciones -->
+            <td data-label="Acciones">
+              <div class="d-flex flex-wrap gap-1">
+                <a href="{{ url_for('editar_indicador', id=ind.id) }}"
+                   class="btn btn-sm btn-primary action-btn">✏️ Editar</a>
+
+                <form action="{{ url_for('toggle_indicador', id=ind.id) }}" method="post">
+                  <button type="submit"
+                          class="btn btn-sm {% if ind.activo %}btn-warning{% else %}btn-success{% endif %} action-btn">
+                    {% if ind.activo %}🔒 Desactivar{% else %}🔓 Activar{% endif %}
+                  </button>
+                </form>
+              </div>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
 </div>
+
+<style>
+  .action-btn { min-width: 110px; text-align: center; }
+  .color-dot {
+    display:inline-block; width: 14px; height: 14px; border-radius: 50%;
+    border: 1px solid rgba(0,0,0,.15); vertical-align: middle;
+  }
+  .color-code { white-space: nowrap; }
+
+  /* Sticky header */
+  #tablaIndicadores thead.sticky-top { top: 0; z-index: 2; }
+
+  /* Columna “cards” en mobile */
+  @media (max-width: 640px) {
+    #tablaIndicadores thead { display: none; }
+    #tablaIndicadores tbody tr {
+      display: block;
+      margin-bottom: .85rem;
+      border: 1px solid var(--bs-border-color);
+      border-radius: .75rem;
+      padding: .5rem .75rem;
+      background: var(--bs-body-bg);
+      box-shadow: 0 1px 2px rgba(0,0,0,.05);
+    }
+    #tablaIndicadores tbody td {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border: none !important;
+      padding: .35rem 0;
+      gap: .75rem;
+    }
+    #tablaIndicadores tbody td::before {
+      content: attr(data-label);
+      font-weight: 600;
+      color: var(--bs-secondary-color);
+      margin-right: 1rem;
+      flex: 1;
+      max-width: 50%;
+    }
+    #tablaIndicadores tbody td > *:not(form):not(div) {
+      margin-left: auto;
+    }
+    /* Acciones apiladas */
+    #tablaIndicadores tbody td [data-label="Acciones"], 
+    #tablaIndicadores tbody td:last-child {
+      display: block;
+    }
+    #tablaIndicadores tbody td:last-child .d-flex {
+      flex-direction: column;
+      align-items: stretch;
+    }
+    .action-btn { min-width: unset; width: 100%; }
+  }
+
+  /* Ocultar columnas menos críticas en pantallas medianas (ajustable) */
+  @media (max-width: 992px) {
+    #tablaIndicadores .col-sector,
+    #tablaIndicadores .col-objetivo { display: none; }
+  }
+
+  /* Evitar que el nombre rompa el layout */
+  #tablaIndicadores td:nth-child(2),
+  #tablaIndicadores th:nth-child(2) {
+    max-width: 320px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+</style>
 {% endblock %}

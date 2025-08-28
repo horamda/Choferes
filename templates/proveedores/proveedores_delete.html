@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Eliminar Proveedor{% endblock %}
+{% block header %}🗑️ Eliminar Proveedor{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+  <div class="card shadow-sm">
+    <div class="card-body text-center">
+      <h4>¿Estás seguro de eliminar el proveedor <strong>{{ proveedor.nombre }}</strong>?</h4>
+      <form method="POST" action="{{ url_for('delete_proveedor_form', id=proveedor.id) }}">
+        <div class="mt-4">
+          <button type="submit" class="btn btn-danger">Sí, eliminar</button>
+          <a href="{{ url_for('admin_proveedores') }}" class="btn btn-secondary">Cancelar</a>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

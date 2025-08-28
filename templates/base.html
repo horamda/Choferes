@@ -1132,6 +1132,54 @@
         Asignaciones
       </a>
     </div>
+  
+ <!-- Bloque expandible de Mantenimiento Infraestructura -->
+    <li>
+      <a class="nav-link d-flex justify-content-between align-items-center"
+         data-bs-toggle="collapse"
+         href="#submenuMantenimiento"
+         role="button"
+         aria-expanded="false"
+         aria-controls="submenuMantenimiento">
+        <span><i class="bi bi-building-gear"></i> Mantenimiento</span>
+        <i class="bi bi-caret-down-fill"></i>
+      </a>
+      <div class="collapse" id="submenuMantenimiento">
+        <ul class="btn-toggle-nav list-unstyled fw-normal small ms-3">
+          <li>
+            <a class="nav-link {% if request.endpoint == 'admin_proveedores' %}active{% endif %}"
+               href="{{ url_for('admin_proveedores') }}">
+              📦 Proveedores
+            </a>
+          </li>
+          <li>
+            <a class="nav-link {% if request.endpoint == 'admin_rubros' %}active{% endif %}"
+               href="{{ url_for('admin_rubros') }}">
+              🏷️ Rubros
+            </a>
+          </li>
+          <li>
+            <a class="nav-link {% if request.endpoint == 'admin_pedidos' %}active{% endif %}"
+               href="{{ url_for('admin_pedidos') }}">
+              📝 Pedidos
+            </a>
+          </li>
+          <li>
+            <a class="nav-link {% if request.endpoint == 'admin_ordenes' %}active{% endif %}"
+               href="{{ url_for('admin_ordenes') }}">
+              🛠️ Órdenes de Servicio
+            </a>
+          </li>
+          <li>
+            <a class="nav-link {% if request.endpoint == 'admin_gastos' %}active{% endif %}"
+               href="{{ url_for('admin_gastos') }}">
+              💰 Gastos
+            </a>
+          </li>
+        </ul>
+      </div>
+    </li>
+       
 
         <div class="nav-item" style="margin-top: 20px">
           <a href="{{ url_for('logout') }}" class="nav-link">

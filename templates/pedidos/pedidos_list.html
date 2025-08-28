@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+
+{% block title %}Pedidos a Proveedores{% endblock %}
+
+{% block content %}
+<h2>📑 Pedidos a Proveedores</h2>
+<a href="#" class="btn btn-primary mb-3" onclick="abrirFormularioPedido()">➕ Nuevo Pedido</a>
+
+<table class="table table-bordered" id="tablaPedidos">
+    <thead class="thead-dark">
+        <tr>
+            <th>ID</th>
+            <th>Proveedor</th>
+            <th>Fecha Pedido</th>
+            <th>Fecha Entrega</th>
+            <th>Estado</th>
+            <th>Acciones</th>
+        </tr>
+    </thead>
+    <tbody></tbody>
+</table>
+
+<!-- Modal pedidos -->
+<div class="modal fade" id="pedidoModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form id="formPedido">
+        <div class="modal-header">
+          <h5 class="modal-title">Pedido</h5>
+          <button type="button" class="close" data-dismiss="modal">&times;</button>
+        </div>
+        <div class="modal-body">
+            <input type="hidden" id="pedidoId">
+            <div class="form-group"><label>Proveedor ID</label><input type="number" id="proveedor_id" class="form-control" required></div>
+            <div class="form-group"><label>Fecha Pedido</label><input type="date" id="fecha_pedido" class="form-control" required></div>
+            <div class="form-group"><label>Fecha Entrega</label><input type="date" id="fecha_entrega" class="form-control" required></div>
+            <div class="form-group"><label>Estado</label><input type="text" id="estado" class="form-control" required></div>
+        </div>
+        <div class="modal-footer">
+          <button type="submit" class="btn btn-success">Guardar</button>
+          <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+const API_PEDIDOS = "/api/pedidos_proveedores";
+
+document.addEventListener("DOMContentLoaded", () => {
+    cargarPedidos();
+    document.getElementById("formPedido").addEventListener("submit", guardarPedido);
+});
+
+function cargarPedidos() {
+    fetch(API_PEDIDOS)
+        .then(r => r.json())
+        .then(data => {
+            const tbody = document.querySelector("#tablaPedidos tbody");
+            tbody.innerHTML = "";
+            data.forEach(p => {
+                tbody.innerHTML += `
+                  <tr>
+                    <td>${p.id}</td>
+                    <td>${p.proveedor}</td>
+                    <td>${p.fecha_pedido}</td>
+                    <td>${p.fecha_entrega}</td>
+                    <td>${p.estado}</td>
+                    <td>
+                      <button class="btn btn-sm btn-info" onclick="editarPedido(${p.id})">✏️</button>
+                      <button class="btn btn-sm btn-danger" onclick="eliminarPedido(${p.id})">🗑️</button>
+                    </td>
+                  </tr>`;
+            });
+        });
+}
+
+function abrirFormularioPedido() {
+    document.getElementById("pedidoId").value = "";
+    document.getElementById("formPedido").reset();
+    $("#pedidoModal").modal("show");
+}
+
+function editarPedido(id) {
+    fetch(`${API_PEDIDOS}/${id}`)
+        .then(r => r.json())
+        .then(p => {
+            document.getElementById("pedidoId").value = p.id;
+            document.getElementById("proveedor_id").value = p.proveedor_id;
+            document.getElementById("fecha_pedido").value = p.fecha_pedido.split("T")[0];
+            document.getElementById("fecha_entrega").value = p.fecha_entrega.split("T")[0];
+            document.getElementById("estado").value = p.estado;
+            $("#pedidoModal").modal("show");
+        });
+}
+
+function guardarPedido(e) {
+    e.preventDefault();
+    const id = document.getElementById("pedidoId").value;
+    const pedido = {
+        proveedor_id: document.getElementById("proveedor_id").value,
+        fecha_pedido: document.getElementById("fecha_pedido").value,
+        fecha_entrega: document.getElementById("fecha_entrega").value,
+        estado: document.getElementById("estado").value
+    };
+
+    fetch(id ? `${API_PEDIDOS}/${id}` : API_PEDIDOS, {
+        method: id ? "PUT" : "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify(pedido)
+    }).then(() => {
+        $("#pedidoModal").modal("hide");
+        cargarPedidos();
+    });
+}
+
+function eliminarPedido(id) {
+    if (!confirm("¿Eliminar pedido?")) return;
+    fetch(`${API_PEDIDOS}/${id}`, {method: "DELETE"}).then(() => cargarPedidos());
+}
+</script>
+{% endblock %}

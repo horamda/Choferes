@@ -1,70 +1,139 @@
 {% extends "base.html" %}
 
 {% block title %}Editar Indicador{% endblock %}
-{% block header %}✏️ Editar Indicador{% endblock %}
 
 {% block content %}
 <div class="container mt-4">
-  <form method="POST" class="row g-3 needs-validation" novalidate>
+  <h2 class="mb-4">✏️ Editar Indicador</h2>
 
+  <form method="post" class="card shadow p-4 mb-4">
     <!-- Nombre -->
-    <div class="col-12">
-      <label class="form-label">Nombre del Indicador</label>
-      <input type="text"
-             name="nombre"
-             class="form-control"
-             value="{{ indicador.nombre }}"
-             required>
-      <div class="invalid-feedback">Ingrese un nombre.</div>
+    <div class="mb-3">
+      <label for="nombre" class="form-label">📌 Nombre del Indicador</label>
+      <input type="text" class="form-control" id="nombre" name="nombre"
+             value="{{ indicador.nombre }}" required>
     </div>
 
     <!-- Sector -->
-    <div class="col-md-6">
-      <label class="form-label">Sector</label>
-      <select name="sector_id" class="form-select" required>
-        {% for s in sectores %}
-          <option value="{{ s.id }}"
-            {% if s.id == indicador.sector_id %}selected{% endif %}>
-            {{ s.nombre }}
-          </option>
-        {% endfor %}
-      </select>
-      <div class="invalid-feedback">Seleccione un sector.</div>
+    <div class="row">
+      <div class="col-md-6 mb-3">
+        <label for="sector_id" class="form-label">🏢 Sector</label>
+        <select class="form-select" id="sector_id" name="sector_id">
+          {% for s in sectores %}
+            <option value="{{ s.id }}" {% if indicador.sector_id == s.id %}selected{% endif %}>
+              {{ s.nombre }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <!-- Estado -->
+      <div class="col-md-6 mb-3">
+        <label for="activo" class="form-label">Estado</label>
+        <select class="form-select" id="activo" name="activo">
+          <option value="1" {% if indicador.activo %}selected{% endif %}>Activo</option>
+          <option value="0" {% if not indicador.activo %}selected{% endif %}>Inactivo</option>
+        </select>
+      </div>
     </div>
 
-    <!-- Estado -->
-    <div class="col-md-6">
-      <label class="form-label">Estado</label>
-      <select name="activo" class="form-select" required>
-        <option value="1" {% if indicador.activo %}selected{% endif %}>
-          Activo
-        </option>
-        <option value="0" {% if not indicador.activo %}selected{% endif %}>
-          Inactivo
-        </option>
-      </select>
+    <!-- Configuración de gráfico -->
+    <div class="row">
+      <!-- Tipo de gráfico -->
+      <div class="col-md-4 mb-3">
+        <label for="tipo_grafico" class="form-label">📈 Tipo de gráfico</label>
+        <select class="form-select" id="tipo_grafico" name="tipo_grafico">
+          {% set tg = (indicador.tipo_grafico or '') %}
+          <option value="" {% if tg=='' %}selected{% endif %}>-</option>
+          <option value="bar"   {% if tg=='bar'   %}selected{% endif %}>Barras</option>
+          <option value="line"  {% if tg=='line'  %}selected{% endif %}>Líneas</option>
+          <option value="area"  {% if tg=='area'  %}selected{% endif %}>Área</option>
+          <option value="pie"   {% if tg=='pie'   %}selected{% endif %}>Torta</option>
+          <option value="radar" {% if tg=='radar' %}selected{% endif %}>Radar</option>
+        </select>
+        <div class="form-text">Usado por el dashboard para renderizar este indicador.</div>
+      </div>
+
+      <!-- Color -->
+      <div class="col-md-4 mb-3">
+        <label for="color_grafico" class="form-label">🎨 Color</label>
+        <div class="d-flex align-items-center gap-2">
+          <input type="color" class="form-control form-control-color"
+                 id="color_grafico" name="color_grafico"
+                 value="{{ indicador.color_grafico or '#0d6efd' }}" title="Elegir color">
+          <input type="text" class="form-control"
+                 id="color_grafico_hex" placeholder="#RRGGBB"
+                 value="{{ indicador.color_grafico or '#0d6efd' }}">
+        </div>
+        <div class="form-text">Podés escribir el HEX o elegirlo del selector.</div>
+      </div>
+
+      <!-- Relleno -->
+      <div class="col-md-4 mb-3">
+        <label class="form-label d-block">🖌️ Relleno</label>
+        <div class="form-check form-switch">
+          <input class="form-check-input" type="checkbox" role="switch"
+                 id="fill_grafico" name="fill_grafico" value="1"
+                 {% if indicador.fill_grafico %}checked{% endif %}>
+          <label class="form-check-label" for="fill_grafico">Activar relleno (para área/linea)</label>
+        </div>
+      </div>
     </div>
 
-    <!-- Botones -->
-    <div class="col-12">
-      <button type="submit" class="btn btn-primary">Guardar Cambios</button>
-      <a href="{{ url_for('admin_indicadores') }}" class="btn btn-secondary">
-        Cancelar
-      </a>
+    <div class="d-flex gap-2">
+      <button type="submit" class="btn btn-primary">💾 Guardar Cambios</button>
+      <a href="{{ url_for('admin_indicadores') }}" class="btn btn-secondary">↩️ Volver</a>
     </div>
   </form>
+
+  <!-- Sección de objetivos -->
+  <h4 class="mt-4">🎯 Objetivos</h4>
+  <a href="{{ url_for('nuevo_objetivo', indicador_id=indicador.id) }}" class="btn btn-success mb-3">➕ Nuevo Objetivo</a>
+
+  <div class="table-responsive">
+    <table class="table table-striped table-hover">
+      <thead class="table-dark">
+        <tr>
+          <th>Año</th>
+          <th>Tipo</th>
+          <th>Valor</th>
+          <th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for obj in objetivos %}
+          <tr>
+            <td>{{ obj.anio }}</td>
+            <td>{{ obj.objetivo_tipo }}</td>
+            <td>{{ obj.objetivo_valor }}</td>
+            <td class="d-flex gap-2">
+              <a href="{{ url_for('editar_objetivo', id=obj.id) }}" class="btn btn-sm btn-primary">✏️ Editar</a>
+              <form action="{{ url_for('eliminar_objetivo', id=obj.id) }}" method="post">
+                <button type="submit" class="btn btn-sm btn-danger"
+                        onclick="return confirm('¿Eliminar objetivo?')">🗑️ Eliminar</button>
+              </form>
+            </td>
+          </tr>
+        {% else %}
+          <tr>
+            <td colspan="4" class="text-center text-muted">No hay objetivos cargados</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
 </div>
 
-<!-- Validación Bootstrap opcional -->
+<!-- Sin dependencias: sincroniza el input color y el campo de texto -->
 <script>
-  (() => {
-    'use strict';
-    const forms = document.querySelectorAll('.needs-validation');
-    Array.from(forms).forEach(f => {
-      f.addEventListener('submit', e => {
-        if (!f.checkValidity()) { e.preventDefault(); e.stopPropagation(); }
-        f.classList.add('was-validated');
-      }, false);
+  (function () {
+    const color = document.getElementById('color_grafico');
+    const hex   = document.getElementById('color_grafico_hex');
+    if (!color || !hex) return;
+    color.addEventListener('input', () => hex.value = color.value);
+    hex.addEventListener('input', () => {
+      const v = hex.value.trim();
+      if (/^#([0-9a-fA-F]{6})$/.test(v)) color.value = v;
     });
   })();
 </script>

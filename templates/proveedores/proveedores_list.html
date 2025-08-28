@@ -1,0 +1,684 @@
+{% extends "base.html" %} {% block title %}Proveedores{% endblock %} {% block
+header %}📦 Proveedores{% endblock %} {% block content %}
+<div class="container-fluid py-3">
+  <!-- Header mejorado -->
+  <div class="row align-items-center mb-4">
+    <div class="col-12 col-md-6 mb-2 mb-md-0">
+      <h2 class="h4 mb-1 fw-bold text-primary">
+        <i class="bi bi-building me-2"></i>Gestión de Proveedores
+      </h2>
+      <p class="text-muted small mb-0">
+        {{ proveedores|length }} proveedores registrados
+      </p>
+    </div>
+    <div class="col-12 col-md-6 d-flex flex-column flex-sm-row gap-2">
+      <!-- Buscador -->
+      <div class="flex-grow-1">
+        <div class="position-relative">
+          <input
+            type="text"
+            class="form-control form-control-sm pe-5"
+            placeholder="Buscar proveedores..."
+            id="searchInput"
+          />
+          <i
+            class="bi bi-search position-absolute top-50 end-0 translate-middle-y me-3 text-muted"
+          ></i>
+        </div>
+      </div>
+      <!-- Filtros rápidos -->
+      <div class="dropdown">
+        <button
+          class="btn btn-outline-secondary btn-sm dropdown-toggle"
+          type="button"
+          data-bs-toggle="dropdown"
+        >
+          <i class="bi bi-filter me-1"></i>Filtros
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end">
+          <li>
+            <a class="dropdown-item filter-option" href="#" data-filter="all"
+              >Todos</a
+            >
+          </li>
+          <li>
+            <a class="dropdown-item filter-option" href="#" data-filter="high"
+              >Servicio Alto (≥80%)</a
+            >
+          </li>
+          <li>
+            <a class="dropdown-item filter-option" href="#" data-filter="medium"
+              >Servicio Medio (50-79%)</a
+            >
+          </li>
+          <li>
+            <a class="dropdown-item filter-option" href="#" data-filter="low"
+              >Servicio Bajo (<50%)</a
+            >
+          </li>
+        </ul>
+      </div>
+      <!-- Botón nuevo proveedor -->
+      <a
+        href="{{ url_for('create_proveedor_form') }}"
+        class="btn btn-primary btn-sm"
+      >
+        <i class="bi bi-plus-circle me-1"></i>
+        <span class="d-none d-sm-inline">Nuevo Proveedor</span>
+        <span class="d-sm-none">Nuevo</span>
+      </a>
+    </div>
+  </div>
+
+  <!-- Estadísticas rápidas -->
+  <div class="row mb-4">
+    <div class="col-6 col-md-3 mb-2 mb-md-0">
+      <div class="card border-0 bg-success bg-opacity-10 text-center py-2">
+        <div class="fw-bold text-success">
+          {{ proveedores|selectattr('nivel_servicio', '>=', 80)|list|length }}
+        </div>
+        <small class="text-success">Alto servicio</small>
+      </div>
+    </div>
+    <div class="col-6 col-md-3 mb-2 mb-md-0">
+      <div class="card border-0 bg-warning bg-opacity-10 text-center py-2">
+        <div class="fw-bold text-warning">
+          {{ proveedores|selectattr('nivel_servicio', '>=',
+          50)|selectattr('nivel_servicio', '<', 80)|list|length }}
+        </div>
+        <small class="text-warning">Medio servicio</small>
+      </div>
+    </div>
+    <div class="col-6 col-md-3 mb-2 mb-md-0">
+      <div class="card border-0 bg-danger bg-opacity-10 text-center py-2">
+        <div class="fw-bold text-danger">
+          {{ proveedores|selectattr('nivel_servicio', '<', 50)|list|length }}
+        </div>
+        <small class="text-danger">Bajo servicio</small>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card border-0 bg-info bg-opacity-10 text-center py-2">
+        <div class="fw-bold text-info">
+          {{ proveedores|selectattr('rubro_nombre')|list|length }}
+        </div>
+        <small class="text-info">Con rubro</small>
+      </div>
+    </div>
+  </div>
+
+  <!-- Controles de vista -->
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <div class="btn-group btn-group-sm d-none d-md-flex" role="group">
+      <input
+        type="radio"
+        class="btn-check"
+        name="viewMode"
+        id="tableView"
+        checked
+      />
+      <label class="btn btn-outline-secondary" for="tableView">
+        <i class="bi bi-table me-1"></i>Tabla
+      </label>
+      <input type="radio" class="btn-check" name="viewMode" id="cardView" />
+      <label class="btn btn-outline-secondary" for="cardView">
+        <i class="bi bi-grid-3x3-gap me-1"></i>Tarjetas
+      </label>
+    </div>
+
+    <div class="d-flex align-items-center gap-2">
+      <small class="text-muted">Ordenar por:</small>
+      <select
+        class="form-select form-select-sm"
+        style="width: auto"
+        id="sortSelect"
+      >
+        <option value="nombre">Nombre</option>
+        <option value="nivel_servicio">Nivel de servicio</option>
+        <option value="rubro">Rubro</option>
+        <option value="localidad">Localidad</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="card shadow-sm border-0">
+    <div class="card-body p-0">
+      <!-- 🖥️ Vista de escritorio: Tabla mejorada -->
+      <div class="table-responsive d-none d-md-block" id="tableContainer">
+        <table class="table table-hover align-middle mb-0">
+          <thead class="bg-light border-0">
+            <tr>
+              <th class="border-0 ps-4 py-3 fw-semibold">Proveedor</th>
+              <th class="border-0 py-3 fw-semibold">CUIT</th>
+              <th class="border-0 py-3 fw-semibold">Rubro</th>
+              <th class="border-0 py-3 fw-semibold">Ubicación</th>
+              <th class="border-0 py-3 fw-semibold">Contacto</th>
+              <th class="border-0 py-3 fw-semibold">Servicio</th>
+              <th class="border-0 py-3 fw-semibold text-center">Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="proveedoresTableBody">
+            {% for p in proveedores %}
+            <tr
+              class="proveedor-row"
+              data-nombre="{{ p.nombre|lower }}"
+              data-rubro="{{ p.rubro_nombre|lower or '' }}"
+              data-localidad="{{ p.localidad|lower or '' }}"
+              data-nivel="{{ p.nivel_servicio }}"
+            >
+              <td class="ps-4 py-3">
+                <div>
+                  <div class="fw-semibold text-light">{{ p.nombre }}</div>
+                  {% if p.email %}
+                  <small class="text-light opacity-75">{{ p.email }}</small>
+                  {% endif %}
+                </div>
+              </td>
+              <td class="py-3">
+                <code class="bg-light px-2 py-1 rounded small"
+                  >{{ p.cuit or '-' }}</code
+                >
+              </td>
+              <td class="py-3">
+                <span
+                  class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25"
+                >
+                  {{ p.rubro_nombre or "Sin rubro" }}
+                </span>
+              </td>
+              <td class="py-3">
+                <div class="small">
+                  <div class="text-light">{{ p.localidad or '-' }}</div>
+                  <div class="text-light opacity-75">
+                    {{ p.provincia or '-' }}
+                  </div>
+                </div>
+              </td>
+              <td class="py-3">
+                {% if p.telefono %}
+                <a href="tel:{{ p.telefono }}" class="text-decoration-none">
+                  <i class="bi bi-telephone me-1"></i>{{ p.telefono }}
+                </a>
+                {% else %}
+                <span class="text-muted">-</span>
+                {% endif %}
+              </td>
+              <td class="py-3">
+                <div class="d-flex align-items-center gap-2">
+                  <div class="progress" style="width: 60px; height: 8px">
+                    <div
+                      class="progress-bar {% if p.nivel_servicio >= 80 %}bg-success {% elif p.nivel_servicio >= 50 %}bg-warning {% else %}bg-danger{% endif %}"
+                      style="width: {{ p.nivel_servicio }}%"
+                    ></div>
+                  </div>
+                  <span
+                    class="small fw-semibold {% if p.nivel_servicio >= 80 %}text-success {% elif p.nivel_servicio >= 50 %}text-warning {% else %}text-danger{% endif %}"
+                  >
+                    {{ p.nivel_servicio }}%
+                  </span>
+                </div>
+              </td>
+              <td class="text-center py-3">
+                <div class="btn-group btn-group-sm">
+                  <a
+                    href="{{ url_for('update_proveedor_form', id=p.id) }}"
+                    class="btn btn-outline-warning btn-sm"
+                    title="Editar proveedor"
+                    data-bs-toggle="tooltip"
+                  >
+                    <i class="bi bi-pencil-square"></i>
+                  </a>
+                  <a
+                    href="{{ url_for('delete_proveedor_form', id=p.id) }}"
+                    class="btn btn-outline-danger btn-sm"
+                    title="Eliminar proveedor"
+                    data-bs-toggle="tooltip"
+                    onclick="return confirm('¿Estás seguro de que quieres eliminar este proveedor?')"
+                  >
+                    <i class="bi bi-trash"></i>
+                  </a>
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <!-- 📱 Vista móvil y tarjetas mejoradas -->
+      <div class="d-md-none" id="mobileContainer">
+        <div class="p-3" id="proveedoresMobileBody">
+          {% for p in proveedores %}
+          <div
+            class="card mb-3 border-0 shadow-sm proveedor-card"
+            data-nombre="{{ p.nombre|lower }}"
+            data-rubro="{{ p.rubro_nombre|lower or '' }}"
+            data-localidad="{{ p.localidad|lower or '' }}"
+            data-nivel="{{ p.nivel_servicio }}"
+          >
+            <div class="card-body p-3">
+              <!-- Header con nivel de servicio -->
+              <div
+                class="d-flex justify-content-between align-items-start mb-3"
+              >
+                <div class="flex-grow-1">
+                  <h6 class="mb-1 fw-bold text-light">{{ p.nombre }}</h6>
+                  <span
+                    class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 small"
+                  >
+                    {{ p.rubro_nombre or "Sin rubro" }}
+                  </span>
+                </div>
+                <div class="text-end ms-2">
+                  <div class="progress mb-1" style="width: 50px; height: 6px">
+                    <div
+                      class="progress-bar {% if p.nivel_servicio >= 80 %}bg-success {% elif p.nivel_servicio >= 50 %}bg-warning {% else %}bg-danger{% endif %}"
+                      style="width: {{ p.nivel_servicio }}%"
+                    ></div>
+                  </div>
+                  <small
+                    class="fw-semibold {% if p.nivel_servicio >= 80 %}text-success {% elif p.nivel_servicio >= 50 %}text-warning {% else %}text-danger{% endif %}"
+                  >
+                    {{ p.nivel_servicio }}%
+                  </small>
+                </div>
+              </div>
+
+              <!-- Información en grid -->
+              <div class="row g-2 mb-3">
+                <div class="col-6">
+                  <small class="text-muted d-block">CUIT</small>
+                  <code class="bg-light px-2 py-1 rounded small"
+                    >{{ p.cuit or '-' }}</code
+                  >
+                </div>
+                <div class="col-6">
+                  <small class="text-muted d-block">Teléfono</small>
+                  {% if p.telefono %}
+                  <a
+                    href="tel:{{ p.telefono }}"
+                    class="text-decoration-none small"
+                  >
+                    <i class="bi bi-telephone me-1"></i>{{ p.telefono }}
+                  </a>
+                  {% else %}
+                  <span class="text-muted small">-</span>
+                  {% endif %}
+                </div>
+                <div class="col-12">
+                  <small class="text-muted d-block">Ubicación</small>
+                  <span class="small">
+                    <i class="bi bi-geo-alt me-1 text-muted"></i>
+                    {{ p.localidad or '-' }}{% if p.localidad and p.provincia
+                    %}, {% endif %}{{ p.provincia or '' }}
+                  </span>
+                </div>
+              </div>
+
+              <!-- Botones de acción -->
+              <div class="d-flex gap-2">
+                <a
+                  href="{{ url_for('update_proveedor_form', id=p.id) }}"
+                  class="btn btn-warning btn-sm flex-fill"
+                >
+                  <i class="bi bi-pencil-square me-1"></i>Editar
+                </a>
+                <a
+                  href="{{ url_for('delete_proveedor_form', id=p.id) }}"
+                  class="btn btn-outline-danger btn-sm flex-fill"
+                  onclick="return confirm('¿Estás seguro?')"
+                >
+                  <i class="bi bi-trash me-1"></i>Eliminar
+                </a>
+              </div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <!-- Vista de tarjetas para escritorio -->
+      <div class="d-none" id="cardContainer">
+        <div class="p-3">
+          <div class="row" id="proveedoresCardBody">
+            {% for p in proveedores %}
+            <div
+              class="col-12 col-lg-6 col-xl-4 mb-3 proveedor-card-desktop"
+              data-nombre="{{ p.nombre|lower }}"
+              data-rubro="{{ p.rubro_nombre|lower or '' }}"
+              data-localidad="{{ p.localidad|lower or '' }}"
+              data-nivel="{{ p.nivel_servicio }}"
+            >
+              <div class="card h-100 border-0 shadow-sm">
+                <div class="card-body p-3">
+                  <div
+                    class="d-flex justify-content-between align-items-start mb-2"
+                  >
+                    <h6 class="mb-0 fw-bold text-light text-truncate">
+                      {{ p.nombre }}
+                    </h6>
+                    <span
+                      class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 ms-2"
+                    >
+                      {{ p.rubro_nombre or "Sin rubro" }}
+                    </span>
+                  </div>
+
+                  <div class="mb-3">
+                    <div
+                      class="d-flex justify-content-between align-items-center mb-1"
+                    >
+                      <small class="text-muted">Nivel de servicio</small>
+                      <small
+                        class="fw-semibold {% if p.nivel_servicio >= 80 %}text-success {% elif p.nivel_servicio >= 50 %}text-warning {% else %}text-danger{% endif %}"
+                      >
+                        {{ p.nivel_servicio }}%
+                      </small>
+                    </div>
+                    <div class="progress" style="height: 6px">
+                      <div
+                        class="progress-bar {% if p.nivel_servicio >= 80 %}bg-success {% elif p.nivel_servicio >= 50 %}bg-warning {% else %}bg-danger{% endif %}"
+                        style="width: {{ p.nivel_servicio }}%"
+                      ></div>
+                    </div>
+                  </div>
+
+                  <div class="small text-muted mb-3">
+                    <div><strong>CUIT:</strong> {{ p.cuit or '-' }}</div>
+                    <div>
+                      <strong>Ubicación:</strong> {{ p.localidad or '-' }}{% if
+                      p.localidad and p.provincia %}, {% endif %}{{ p.provincia
+                      or '' }}
+                    </div>
+                    <div>
+                      <strong>Teléfono:</strong>
+                      {% if p.telefono %}
+                      <a
+                        href="tel:{{ p.telefono }}"
+                        class="text-decoration-none"
+                        >{{ p.telefono }}</a
+                      >
+                      {% else %} - {% endif %}
+                    </div>
+                  </div>
+
+                  <div class="d-flex gap-1">
+                    <a
+                      href="{{ url_for('update_proveedor_form', id=p.id) }}"
+                      class="btn btn-warning btn-sm flex-fill"
+                    >
+                      <i class="bi bi-pencil-square"></i>
+                    </a>
+                    <a
+                      href="{{ url_for('delete_proveedor_form', id=p.id) }}"
+                      class="btn btn-outline-danger btn-sm flex-fill"
+                      onclick="return confirm('¿Estás seguro?')"
+                    >
+                      <i class="bi bi-trash"></i>
+                    </a>
+                  </div>
+                </div>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Estado vacío -->
+  <div class="text-center py-5 d-none" id="emptyState">
+    <i class="bi bi-search display-1 text-muted mb-3"></i>
+    <h5 class="text-muted mb-2">No se encontraron proveedores</h5>
+    <p class="text-muted">Intenta cambiar los filtros de búsqueda</p>
+  </div>
+</div>
+
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    // Elementos del DOM
+    const searchInput = document.getElementById("searchInput");
+    const sortSelect = document.getElementById("sortSelect");
+    const tableView = document.getElementById("tableView");
+    const cardView = document.getElementById("cardView");
+    const tableContainer = document.getElementById("tableContainer");
+    const cardContainer = document.getElementById("cardContainer");
+    const mobileContainer = document.getElementById("mobileContainer");
+    const emptyState = document.getElementById("emptyState");
+
+    // Variables para filtros
+    let currentFilter = "all";
+    let currentSort = "nombre";
+
+    // Función para mostrar/ocultar estado vacío
+    function toggleEmptyState() {
+      const visibleRows = document.querySelectorAll(
+        ".proveedor-row:not(.d-none)"
+      ).length;
+      const visibleCards = document.querySelectorAll(
+        ".proveedor-card:not(.d-none)"
+      ).length;
+      const visibleDesktopCards = document.querySelectorAll(
+        ".proveedor-card-desktop:not(.d-none)"
+      ).length;
+
+      const hasVisible =
+        visibleRows > 0 || visibleCards > 0 || visibleDesktopCards > 0;
+
+      if (hasVisible) {
+        emptyState.classList.add("d-none");
+        tableContainer.classList.toggle("d-none", !tableView.checked);
+        cardContainer.classList.toggle("d-none", !cardView.checked);
+      } else {
+        emptyState.classList.remove("d-none");
+        tableContainer.classList.add("d-none");
+        cardContainer.classList.add("d-none");
+      }
+    }
+
+    // Función de búsqueda
+    function filterProveedores() {
+      const searchTerm = searchInput.value.toLowerCase();
+      const allRows = document.querySelectorAll(
+        ".proveedor-row, .proveedor-card, .proveedor-card-desktop"
+      );
+
+      allRows.forEach((row) => {
+        const nombre = row.dataset.nombre || "";
+        const rubro = row.dataset.rubro || "";
+        const localidad = row.dataset.localidad || "";
+        const nivel = parseInt(row.dataset.nivel) || 0;
+
+        // Filtro de búsqueda
+        const matchesSearch =
+          nombre.includes(searchTerm) ||
+          rubro.includes(searchTerm) ||
+          localidad.includes(searchTerm);
+
+        // Filtro de nivel de servicio
+        let matchesFilter = true;
+        if (currentFilter === "high") {
+          matchesFilter = nivel >= 80;
+        } else if (currentFilter === "medium") {
+          matchesFilter = nivel >= 50 && nivel < 80;
+        } else if (currentFilter === "low") {
+          matchesFilter = nivel < 50;
+        }
+
+        // Mostrar/ocultar elemento
+        if (matchesSearch && matchesFilter) {
+          row.classList.remove("d-none");
+        } else {
+          row.classList.add("d-none");
+        }
+      });
+
+      toggleEmptyState();
+    }
+
+    // Función de ordenamiento
+    function sortProveedores() {
+      const containers = [
+        document.getElementById("proveedoresTableBody"),
+        document.getElementById("proveedoresMobileBody"),
+        document.getElementById("proveedoresCardBody"),
+      ];
+
+      containers.forEach((container) => {
+        if (!container) return;
+
+        const items = Array.from(container.children);
+
+        items.sort((a, b) => {
+          let valueA, valueB;
+
+          switch (currentSort) {
+            case "nivel_servicio":
+              valueA = parseInt(a.dataset.nivel) || 0;
+              valueB = parseInt(b.dataset.nivel) || 0;
+              return valueB - valueA; // Descendente
+            case "rubro":
+              valueA = a.dataset.rubro || "";
+              valueB = b.dataset.rubro || "";
+              return valueA.localeCompare(valueB);
+            case "localidad":
+              valueA = a.dataset.localidad || "";
+              valueB = b.dataset.localidad || "";
+              return valueA.localeCompare(valueB);
+            default: // nombre
+              valueA = a.dataset.nombre || "";
+              valueB = b.dataset.nombre || "";
+              return valueA.localeCompare(valueB);
+          }
+        });
+
+        // Reordenar elementos
+        items.forEach((item) => container.appendChild(item));
+      });
+    }
+
+    // Event listeners
+    searchInput.addEventListener("input", filterProveedores);
+
+    sortSelect.addEventListener("change", function () {
+      currentSort = this.value;
+      sortProveedores();
+    });
+
+    // Filtros rápidos
+    document.querySelectorAll(".filter-option").forEach((option) => {
+      option.addEventListener("click", function (e) {
+        e.preventDefault();
+        currentFilter = this.dataset.filter;
+
+        // Actualizar texto del botón
+        const filterButton = document.querySelector(
+          '[data-bs-toggle="dropdown"]'
+        );
+        const filterTexts = {
+          all: "Todos",
+          high: "Alto servicio",
+          medium: "Medio servicio",
+          low: "Bajo servicio",
+        };
+        filterButton.innerHTML = `<i class="bi bi-filter me-1"></i>${filterTexts[currentFilter]}`;
+
+        filterProveedores();
+      });
+    });
+
+    // Cambio de vista (solo escritorio)
+    if (tableView && cardView) {
+      tableView.addEventListener("change", function () {
+        if (this.checked) {
+          tableContainer.classList.remove("d-none");
+          cardContainer.classList.add("d-none");
+        }
+      });
+
+      cardView.addEventListener("change", function () {
+        if (this.checked) {
+          tableContainer.classList.add("d-none");
+          cardContainer.classList.remove("d-none");
+        }
+      });
+    }
+
+    // Inicializar tooltips
+    const tooltipTriggerList = [].slice.call(
+      document.querySelectorAll('[data-bs-toggle="tooltip"]')
+    );
+    tooltipTriggerList.map(function (tooltipTriggerEl) {
+      return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+
+    // Ordenamiento inicial
+    sortProveedores();
+  });
+</script>
+
+<style>
+  .btn-modern {
+    border-radius: 8px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+  }
+
+  .btn-modern:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  }
+
+  .card {
+    transition: all 0.2s ease;
+    border-radius: 12px;
+  }
+
+  .card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1) !important;
+  }
+
+  .progress {
+    border-radius: 10px;
+    background-color: #f8f9fa;
+  }
+
+  .progress-bar {
+    border-radius: 10px;
+  }
+
+  .table-hover tbody tr:hover {
+    background-color: rgba(0, 0, 0, 0.02);
+  }
+
+  @media (max-width: 768px) {
+    .container-fluid {
+      padding-left: 1rem;
+      padding-right: 1rem;
+    }
+  }
+
+  .fade-in {
+    animation: fadeIn 0.3s ease-in;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .proveedor-row.d-none,
+  .proveedor-card.d-none,
+  .proveedor-card-desktop.d-none {
+    display: none !important;
+  }
+</style>
+{% endblock %}

@@ -4,46 +4,252 @@
 {% block header %}📄 Cargar Resultados desde .txt{% endblock %}
 
 {% block content %}
-<form method="POST" enctype="multipart/form-data" class="mt-4 needs-validation" novalidate>
-    <div class="mb-3">
-        <label for="archivo" class="form-label">Seleccionar archivo .txt</label>
-        <input class="form-control" type="file" id="archivo" name="archivo" accept=".txt" required>
-        <div class="invalid-feedback">
-            Por favor seleccioná un archivo .txt válido.
+<div class="container py-3">
+
+  <!-- Card de carga -->
+  <div class="card shadow-sm border-0 mb-4">
+    <div class="card-body">
+      <form id="formUpload" method="POST" enctype="multipart/form-data" class="needs-validation" novalidate>
+        <div class="row gx-2 gy-3 align-items-center">
+          <div class="col-12">
+            <label class="form-label fw-semibold">Seleccionar archivo .txt</label>
+
+            <!-- Zona drag & drop -->
+            <div id="dropzone" class="dropzone rounded-3 p-3 p-sm-4 mb-2 text-center">
+              <input class="form-control d-none" type="file" id="archivo" name="archivo" accept=".txt" required>
+              <div class="dz-icon mb-2"><i class="fas fa-file-upload fa-lg"></i></div>
+              <div class="dz-text">
+                Arrastrá el archivo aquí o <a href="#" id="btnPick">explorá</a>
+              </div>
+              <div class="small text-muted mt-1">Formato: <code>.txt</code> • Máx. 10 MB</div>
+            </div>
+            <div class="invalid-feedback d-block" id="fileError" style="display:none;">
+              Por favor seleccioná un archivo .txt válido.
+            </div>
+
+            <!-- Resumen del archivo -->
+            <div id="fileInfo" class="alert alert-light border d-flex align-items-center gap-2 py-2 px-3 mt-2 d-none flex-wrap">
+              <i class="fas fa-file-alt"></i>
+              <span class="flex-grow-1 text-truncate" style="min-width: 0;">
+                <strong id="fileName" class="text-truncate d-inline-block" style="max-width: 60vw;">archivo.txt</strong>
+                <span class="text-muted">·</span>
+                <span id="fileSize">0 KB</span>
+              </span>
+              <div class="ms-auto">
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="btnChange">Cambiar</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="col-12 d-flex flex-column flex-sm-row gap-2">
+            <button type="submit" class="btn btn-success w-100 w-sm-auto">
+              <i class="fas fa-upload me-1"></i> Subir archivo
+            </button>
+            <button type="reset" class="btn btn-outline-secondary w-100 w-sm-auto" id="btnReset">Limpiar</button>
+          </div>
         </div>
+      </form>
     </div>
-    <button type="submit" class="btn btn-success">
-        <i class="fas fa-upload"></i> Subir archivo
-    </button>
-</form>
+  </div>
 
-{% if registros %}
-<h5 class="mt-5">📄 Registros cargados</h5>
-<p class="text-muted">Total: {{ registros|length }} registros</p>
+  {% if registros %}
+  <!-- Herramientas de tabla -->
+  <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-2 mb-2">
+    <h5 class="mb-0">📄 Registros cargados</h5>
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+      <span class="badge bg-dark-subtle text-dark fw-normal order-2 order-md-1">
+        Total: <span id="totalRows">{{ registros|length }}</span>
+      </span>
+      <div class="input-group input-group-sm order-1 order-md-2" style="max-width: min(100%, 320px);">
+        <span class="input-group-text"><i class="fas fa-search"></i></span>
+        <input type="text" id="tableSearch" class="form-control" placeholder="Buscar (DNI, indicador...)">
+      </div>
+    </div>
+  </div>
 
-<div class="table-responsive">
-    <table class="table table-bordered mt-2 table-striped table-hover">
-        <thead class="table-light">
-            <tr>
-                <th>DNI</th>
-                <th>Fecha</th>
-                <th>Indicador</th>
-                <th>Valor</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for r in registros %}
-            <tr>
-                <td>{{ r.dni }}</td>
-                <td>{{ r.fecha.strftime('%d/%m/%Y') if r.fecha }}</td>
-                <td>{{ r.indicador|capitalize }}</td>
-                <td class="{% if r.valor > 90 %}text-success{% elif r.valor < 30 %}text-danger{% endif %}">
-                    {{ r.valor }}
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
+  <!-- Tabla responsive (cards en ≤768px) -->
+  <div class="table-responsive">
+    <table id="tablaRegistros" class="table table-hover align-middle">
+      <thead class="table-dark sticky-top">
+        <tr>
+          <th style="white-space: nowrap;">DNI</th>
+          <th>Fecha</th>
+          <th>Indicador</th>
+          <th class="text-end" style="min-width: 92px;">Valor</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in registros %}
+        <tr>
+          <td data-label="DNI">{{ r.dni }}</td>
+          <td data-label="Fecha">{{ r.fecha.strftime('%d/%m/%Y') if r.fecha }}</td>
+          <td data-label="Indicador">
+            <span class="badge bg-secondary-subtle text-secondary border text-wrap">{{ r.indicador|capitalize }}</span>
+          </td>
+          <td data-label="Valor" class="text-end {% if r.valor > 90 %}text-success{% elif r.valor < 30 %}text-danger{% endif %}">
+            {{ '%.2f'|format(r.valor) if r.valor is number else r.valor }}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
     </table>
+  </div>
+  {% endif %}
 </div>
-{% endif %}
+
+<!-- Estilos -->
+<style>
+  /* Si tu navbar es fixed, podés ajustar este offset */
+  :root { --header-offset: 56px; }
+
+  .dropzone {
+    border: 2px dashed var(--bs-border-color);
+    background: var(--bs-body-bg);
+    transition: border-color .15s ease-in-out, background-color .15s ease-in-out;
+    cursor: pointer;
+  }
+  .dropzone:hover, .dropzone.dragover {
+    border-color: var(--bs-primary);
+    background: rgba(var(--bs-primary-rgb), .03);
+  }
+  .dz-icon { opacity: .85; }
+  .dz-text a { text-decoration: underline; }
+
+  /* Header sticky que respeta un navbar fijo */
+  table#tablaRegistros thead.sticky-top {
+    top: calc(var(--header-offset, 0px));
+    z-index: 2;
+  }
+
+  /* Tabla como cards en pantallas medianas/chicas */
+  @media (max-width: 768px) {
+    table#tablaRegistros thead { display: none; }
+    table#tablaRegistros tbody tr {
+      display: block;
+      margin-bottom: .75rem;
+      border: 1px solid var(--bs-border-color);
+      border-radius: .75rem;
+      padding: .5rem .75rem;
+      background: var(--bs-body-bg);
+      box-shadow: 0 1px 2px rgba(0,0,0,.05);
+    }
+    table#tablaRegistros tbody td {
+      display: flex;
+      justify-content: space-between;
+      border: none !important;
+      padding: .35rem 0;
+      gap: .75rem;
+    }
+    table#tablaRegistros tbody td::before {
+      content: attr(data-label);
+      font-weight: 600;
+      margin-right: 1rem;
+      color: var(--bs-secondary-color);
+      flex: 1;
+      max-width: 60%;
+    }
+    table#tablaRegistros tbody td.text-end { justify-content: space-between; text-align: right; }
+  }
+
+  /* Micro-ajustes XS */
+  @media (max-width: 360px) {
+    .dropzone { padding: .85rem !important; }
+    #fileName { max-width: 52vw !important; }
+  }
+</style>
+
+<!-- JS UX: drag&drop, validación, búsqueda -->
+<script>
+(() => {
+  const form = document.getElementById('formUpload');
+  const input = document.getElementById('archivo');
+  const drop = document.getElementById('dropzone');
+  const btnPick = document.getElementById('btnPick');
+  const btnChange = document.getElementById('btnChange');
+  const btnReset = document.getElementById('btnReset');
+  const fileInfo = document.getElementById('fileInfo');
+  const fileName = document.getElementById('fileName');
+  const fileSize = document.getElementById('fileSize');
+  const fileError = document.getElementById('fileError');
+
+  // helpers
+  const fmtSize = b => {
+    if (!b && b !== 0) return '';
+    const u = ['B','KB','MB','GB']; let i = 0;
+    while (b >= 1024 && i < u.length-1) { b /= 1024; i++;
+    }
+    return `${b.toFixed(i ? 1 : 0)} ${u[i]}`;
+  };
+  const isTxt = f => f && /\.txt$/i.test(f.name);
+
+  const setFile = f => {
+    if (!f || !isTxt(f)) {
+      input.value = '';
+      fileInfo.classList.add('d-none');
+      fileError.style.display = 'block';
+      return;
+    }
+    fileName.textContent = f.name;
+    fileSize.textContent = fmtSize(f.size);
+    fileInfo.classList.remove('d-none');
+    fileError.style.display = 'none';
+  };
+
+  // Click “explorá”
+  btnPick && btnPick.addEventListener('click', e => { e.preventDefault(); input.click(); });
+  btnChange && btnChange.addEventListener('click', () => input.click());
+
+  // Input change
+  input.addEventListener('change', () => setFile(input.files[0]));
+
+  // Drag & drop
+  ['dragenter','dragover'].forEach(ev => drop.addEventListener(ev, e => {
+    e.preventDefault(); e.stopPropagation(); drop.classList.add('dragover');
+  }));
+  ['dragleave','drop'].forEach(ev => drop.addEventListener(ev, e => {
+    e.preventDefault(); e.stopPropagation(); drop.classList.remove('dragover');
+  }));
+  drop.addEventListener('drop', e => {
+    const f = e.dataTransfer.files[0];
+    if (f) { input.files = e.dataTransfer.files; setFile(f); }
+  });
+  drop.addEventListener('click', () => input.click());
+
+  // Validación Bootstrap
+  form.addEventListener('submit', e => {
+    if (!input.files.length || !isTxt(input.files[0])) {
+      e.preventDefault(); e.stopPropagation();
+      fileError.style.display = 'block';
+    }
+    form.classList.add('was-validated');
+  });
+
+  // Reset
+  btnReset && btnReset.addEventListener('click', () => {
+    input.value = '';
+    fileInfo.classList.add('d-none');
+    fileError.style.display = 'none';
+    document.getElementById('tableSearch')?.dispatchEvent(new Event('input'));
+  });
+
+  // Búsqueda rápida
+  const search = document.getElementById('tableSearch');
+  const table = document.getElementById('tablaRegistros');
+  if (search && table) {
+    const rows = Array.from(table.querySelectorAll('tbody tr'));
+    const totalEl = document.getElementById('totalRows');
+    search.addEventListener('input', () => {
+      const q = search.value.trim().toLowerCase();
+      let count = 0;
+      rows.forEach(tr => {
+        const text = tr.innerText.toLowerCase();
+        const show = !q || text.includes(q);
+        tr.style.display = show ? '' : 'none';
+        if (show) count++;
+      });
+      totalEl && (totalEl.textContent = count);
+    });
+  }
+})();
+</script>
 {% endblock %}
