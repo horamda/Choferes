@@ -3,126 +3,336 @@
 {% block header %}📊 Dashboard General{% endblock %}
 
 {% block content %}
-<form class="row g-3 align-items-end mb-4" onsubmit="return false">
-  <div class="col-auto">
-    <label class="form-label">Sector</label>
-    <select id="sector_id" name="sector_id" class="form-select"
-            onchange="actualizarDashboard()">
-      {% for sec in sectores %}
-      <option value="{{ sec.id }}"
-        {% if sec.id == sector_id %}selected{% endif %}>
-        {{ sec.nombre }}
-      </option>
-      {% endfor %}
-    </select>
-  </div>
+<style>
+/* Dashboard Custom Styles */
+.dashboard-container {
+  min-height: calc(100vh - 200px);
+}
 
-  <div class="col-auto">
-    <label class="form-label">Desde</label>
-    <input type="date" id="fecha_inicio" name="fecha_inicio"
-           class="form-control" value="{{ fecha_inicio }}"
-           onchange="actualizarDashboard()" />
-  </div>
+.filter-card {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border: none;
+  border-radius: 15px;
+  box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+}
 
-  <div class="col-auto">
-    <label class="form-label">Hasta</label>
-    <input type="date" id="fecha_fin" name="fecha_fin"
-           class="form-control" value="{{ fecha_fin }}"
-           onchange="actualizarDashboard()" />
-  </div>
+.filter-card .card-body {
+  padding: 2rem;
+}
 
-  <div class="col-auto">
-    <button type="button" class="btn btn-primary"
-    
-            onclick="actualizarDashboard()">
-      Actualizar
-    </button>
-  </div>
-</form>
+.filter-card .card-title {
+  color: white;
+  font-weight: 600;
+  margin-bottom: 1.5rem;
+}
 
-<div id="contenedorTarjetas" class="row mb-4 g-2"></div>
-<div id="contenedorGraficos" class="row"></div>
+.form-label {
+  color: white !important;
+  font-weight: 500;
+  margin-bottom: 0.5rem;
+}
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script>
-  let charts = [];
-  function sanitizeId(s) { return s.replace(/[^a-zA-Z0-9]/g, '_'); }
+.form-control, .form-select {
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.2);
+  background-color: rgba(255,255,255,0.1);
+  color: white;
+  padding: 0.75rem;
+}
 
-  async function actualizarDashboard() {
-    const sector = document.getElementById('sector_id').value;
-    const from   = document.getElementById('fecha_inicio').value;
-    const to     = document.getElementById('fecha_fin').value;
-    const tCont  = document.getElementById('contenedorTarjetas');
-    const gCont  = document.getElementById('contenedorGraficos');
+.form-control:focus, .form-select:focus {
+  background-color: rgba(255,255,255,0.15);
+  border-color: rgba(255,255,255,0.5);
+  box-shadow: 0 0 0 0.2rem rgba(255,255,255,0.25);
+  color: white;
+}
 
-    // Limpiar
-    tCont.innerHTML = '';
-    gCont.innerHTML = '';
-    charts.forEach(c=>c.destroy());
-    charts = [];
+.form-control::placeholder {
+  color: rgba(255,255,255,0.7);
+}
 
-    // 1) Resumen de tarjetas
-    const resT = await fetch(
-      `/api/resumen_dashboard?sector_id=${sector}&from=${from}&to=${to}`
-    );
-    const { tarjetas } = await resT.json();
-    if (!tarjetas.length) {
-      tCont.innerHTML = '<div class="alert alert-warning">No hay datos.</div>';
-      return;
-    }
+.form-text {
+  color: rgba(255,255,255,0.8) !important;
+  font-size: 0.875rem;
+}
 
-    // 2) Para cada tarjeta: render + pedir serie
-    for (let t of tarjetas) {
-      // Tarjeta
-      tCont.insertAdjacentHTML('beforeend', `
-        <div class="col-6 col-sm-4 col-md-3 col-lg-2">
-          <div class="card text-white"
-               style="background-color:${t.color||'#0d6efd'}">
-            <div class="card-body p-2 text-center">
-              <small class="text-uppercase">${t.indicador}</small>
-              <div class="fs-4">${t.valor}</div>
-            </div>
-          </div>
-        </div>`);
+.btn-primary {
+  background: linear-gradient(45deg, #28a745, #20c997);
+  border: none;
+  border-radius: 8px;
+  padding: 0.75rem 1.5rem;
+  font-weight: 600;
+  transition: all 0.3s ease;
+}
 
-      // Gráfico
-      const cid = 'g_' + sanitizeId(t.indicador);
-      gCont.insertAdjacentHTML('beforeend', `
-        <div class="col-md-6 mb-4">
-          <div class="card"><div class="card-body">
-            <h5>${t.indicador}</h5>
-            <canvas id="${cid}"></canvas>
-          </div></div>
-        </div>`);
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(40, 167, 69, 0.4);
+}
 
-      // Serie histórica
-      const resS = await fetch(
-        `/api/serie_indicador?sector_id=${sector}` +
-        `&indicador_id=${t.indicador_id}` +
-        `&from=${from}&to=${to}`
-      );
-      const serie = await resS.json();
-      const ctx   = document.getElementById(cid).getContext('2d');
-      const chart = new Chart(ctx, {
-        type: serie.tipo || 'bar',
-        data: {
-          labels: serie.labels,
-          datasets: [{
-            label: t.indicador,
-            data: serie.data,
-            borderColor: serie.color,
-            backgroundColor: serie.color,
-            fill: serie.fill
-          }]
-        },
-        options: { responsive:true, scales:{ y:{ beginAtZero:true } } }
-      });
-      charts.push(chart);
-    }
+.btn-outline-secondary {
+  border: 2px solid rgba(255,255,255,0.3);
+  color: white;
+  border-radius: 8px;
+  padding: 0.75rem 1.5rem;
+  font-weight: 600;
+  transition: all 0.3s ease;
+}
+
+.btn-outline-secondary:hover {
+  background-color: rgba(255,255,255,0.1);
+  border-color: rgba(255,255,255,0.5);
+  color: white;
+  transform: translateY(-2px);
+}
+
+.kpi-card {
+  border-radius: 15px;
+  border: none;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+  transition: all 0.3s ease;
+  overflow: hidden;
+}
+
+.kpi-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+}
+
+.kpi-card .card-body {
+  padding: 1.5rem;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  text-align: center;
+  position: relative;
+}
+
+.kpi-card .card-body::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255,255,255,0.1);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.kpi-card:hover .card-body::before {
+  opacity: 1;
+}
+
+.kpi-value {
+  font-size: 2.5rem;
+  font-weight: 700;
+  margin: 0.5rem 0;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+}
+
+.kpi-label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  opacity: 0.9;
+}
+
+.chart-card {
+  border-radius: 15px;
+  border: none;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+  transition: all 0.3s ease;
+  background: white;
+}
+
+.chart-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+}
+
+.chart-card .card-body {
+  padding: 2rem;
+}
+
+.chart-container {
+  position: relative;
+  margin: auto;
+  height: 350px;
+}
+
+.section-title {
+  color: #2c3e50;
+  font-weight: 700;
+  margin-bottom: 2rem;
+  position: relative;
+}
+
+.section-title::after {
+  content: '';
+  position: absolute;
+  bottom: -10px;
+  left: 0;
+  width: 60px;
+  height: 4px;
+  background: linear-gradient(45deg, #667eea, #764ba2);
+  border-radius: 2px;
+}
+
+.loading-overlay {
+  background: linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.9) 100%);
+  backdrop-filter: blur(10px);
+}
+
+.alert-modern {
+  border-radius: 12px;
+  border: none;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+}
+
+@media (max-width: 768px) {
+  .filter-card .card-body {
+    padding: 1.5rem;
   }
 
-  // Al cargar
-  document.addEventListener('DOMContentLoaded', actualizarDashboard);
-</script>
+  .kpi-card .card-body {
+    padding: 1rem;
+  }
+
+  .kpi-value {
+    font-size: 2rem;
+  }
+
+  .chart-container {
+    height: 250px;
+  }
+
+  .btn {
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+  }
+}
+
+@media (max-width: 576px) {
+  .kpi-card {
+    margin-bottom: 1rem;
+  }
+
+  .chart-card .card-body {
+    padding: 1rem;
+  }
+
+  .section-title {
+    font-size: 1.25rem;
+  }
+}
+</style>
+
+<div class="dashboard-container">
+  <!-- Loading Overlay -->
+  <div id="loading-overlay" class="loading-overlay position-fixed top-0 start-0 w-100 h-100 d-none align-items-center justify-content-center"
+       style="z-index: 1050;">
+    <div class="text-center">
+      <div class="spinner-border text-primary" style="width: 3rem; height: 3rem;" role="status">
+        <span class="visually-hidden">Cargando dashboard...</span>
+      </div>
+      <div class="mt-3 fs-5 text-muted fw-semibold">Cargando dashboard...</div>
+    </div>
+  </div>
+
+  <!-- Filters Section -->
+  <div class="filter-card card mb-5">
+    <div class="card-body">
+      <h5 class="card-title d-flex align-items-center">
+        <i class="bi bi-funnel-fill me-3 fs-4"></i>
+        Filtros de Dashboard
+      </h5>
+      <form class="row g-4 align-items-end dashboard-filter" role="form" aria-label="Filtros del dashboard">
+        <div class="col-12 col-sm-6 col-lg-3">
+          <label for="sector_id" class="form-label">
+            <i class="bi bi-geo-alt-fill me-2"></i>
+            Sector
+          </label>
+          <select id="sector_id" name="sector_id" class="form-select form-select-lg"
+                  aria-describedby="sector-help">
+            {% for sec in sectores %}
+            <option value="{{ sec.id }}"
+              {% if sec.id == sector_id %}selected{% endif %}>
+              {{ sec.nombre }}
+            </option>
+            {% endfor %}
+          </select>
+          <div id="sector-help" class="form-text">Selecciona el sector para filtrar</div>
+        </div>
+
+        <div class="col-12 col-sm-6 col-lg-3">
+          <label for="fecha_inicio" class="form-label">
+            <i class="bi bi-calendar-event me-2"></i>
+            Fecha Inicio
+          </label>
+          <input type="date" id="fecha_inicio" name="fecha_inicio"
+                 class="form-control form-control-lg" value="{{ fecha_inicio }}"
+                 aria-describedby="fecha-inicio-help" />
+          <div id="fecha-inicio-help" class="form-text">Desde cuándo mostrar datos</div>
+        </div>
+
+        <div class="col-12 col-sm-6 col-lg-3">
+          <label for="fecha_fin" class="form-label">
+            <i class="bi bi-calendar-check me-2"></i>
+            Fecha Fin
+          </label>
+          <input type="date" id="fecha_fin" name="fecha_fin"
+                 class="form-control form-control-lg" value="{{ fecha_fin }}"
+                 aria-describedby="fecha-fin-help" />
+          <div id="fecha-fin-help" class="form-text">Hasta cuándo mostrar datos</div>
+        </div>
+
+        <div class="col-12 col-sm-6 col-lg-3">
+          <div class="d-flex gap-3">
+            <button type="button" id="btn-actualizar" class="btn btn-primary btn-lg flex-fill d-flex align-items-center justify-content-center"
+                    aria-label="Actualizar dashboard con filtros">
+              <i class="bi bi-arrow-clockwise me-2"></i>
+              <span>Actualizar</span>
+            </button>
+            <button type="button" id="btn-reset" class="btn btn-outline-secondary btn-lg d-flex align-items-center justify-content-center"
+                    aria-label="Restablecer filtros">
+              <i class="bi bi-arrow-counterclockwise me-2"></i>
+              <span>Reset</span>
+            </button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Dashboard Content -->
+  <div id="dashboard-content">
+    <!-- KPI Cards -->
+    <section class="mb-5">
+      <h4 class="section-title d-flex align-items-center">
+        <i class="bi bi-bar-chart-line-fill me-3 text-primary"></i>
+        Indicadores Clave de Rendimiento
+      </h4>
+      <div id="contenedorTarjetas" class="row g-4" role="region" aria-label="Indicadores clave de rendimiento">
+        <!-- Cards will be populated by JavaScript -->
+      </div>
+    </section>
+
+    <!-- Charts Section -->
+    <section>
+      <h4 class="section-title d-flex align-items-center">
+        <i class="bi bi-graph-up me-3 text-success"></i>
+        Análisis de Tendencias
+      </h4>
+      <div id="contenedorGraficos" class="row g-4" role="region" aria-label="Gráficos de tendencias">
+        <!-- Charts will be populated by JavaScript -->
+      </div>
+    </section>
+  </div>
+</div>
+
+<!-- Dependencies -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
 {% endblock %}
 

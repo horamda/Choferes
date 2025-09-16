@@ -1,230 +1,659 @@
 {% extends "base.html" %}
 
-    {% block title %}Empleados{% endblock %}
-   
+{% block title %}Empleados{% endblock %}
+
+{% block header %}Empleados{% endblock %}
 
 {% block content %}
-    <div class="container-fluid py-3">
-        <header class="d-flex justify-content-between align-items-center mb-4">
-            <h1 class="h5 mb-0">
-                <i class="fas fa-users me-2"></i>🧑‍✈️ Lista de Empleados
-            </h1>
-            <div class="d-flex gap-2">
-                <button id="themeToggle" class="btn btn-outline-secondary" aria-label="Cambiar tema">
-                    <i id="themeIcon" class="fas fa-moon"></i>
-                </button>
-                <a href="{{ url_for('nuevo_chofer') }}" id="newBtn" class="btn btn-success-custom">
-                    <i class="fas fa-plus me-1"></i>
-                    <span>Nuevo Empleado</span>
-                </a>
-            </div>
-        </header>
-
-        <div class="card mb-4">
-            <div class="card-body">
-                <div class="row g-3">
-                    <div class="col-12 col-md-6 col-lg-4">
-                        <div class="input-group">
-                            <span class="input-group-text bg-transparent"><i class="fas fa-search"></i></span>
-                            <input type="search" id="search" class="form-control" placeholder="Buscar: nombre, DNI o sucursal">
-                        </div>
-                    </div>
-                    <div class="col-6 col-md-3 col-lg-2">
-                        <select id="sector" class="form-select">
-                            <option value="">Todos los sectores</option>
-                            <option value="entrega">Entrega</option>
-                            <option value="almacén">Almacén</option>
-                            <option value="administración">Administración</option>
-                            <option value="mantenimiento">Mantenimiento</option>
-                        </select>
-                    </div>
-                    <div class="col-6 col-md-3 col-lg-2">
-                        <select id="sucursal" class="form-select">
-                            <option value="">Todas las sucursales</option>
-                            <option value="Casa Central">Casa Central</option>
-                            <option value="Sucursal Norte">Sucursal Dolores</option>
-                        </select>
-                    </div>
-                    <div class="col-12 col-md-6 col-lg-4 d-flex justify-content-end">
-                        <button type="reset" class="btn btn-outline-secondary">Limpiar filtros</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="d-flex justify-content-between align-items-center mb-3">
-            <small id="countTxt" class="text-muted">{{ choferes|length }} empleados</small>
-            <div class="btn-group" role="group">
-                <input type="radio" class="btn-check" name="view" id="grid" checked>
-                <label class="btn btn-outline-secondary" for="grid"><i class="fas fa-th"></i></label>
-                <input type="radio" class="btn-check" name="view" id="list">
-                <label class="btn btn-outline-secondary" for="list"><i class="fas fa-list"></i></label>
-            </div>
-        </div>
-
-        <div class="row g-3" id="empGrid">
-            {% for chofer in choferes %}
-            <div class="col-12 col-sm-6 col-md-4 col-lg-3 emp-card" 
-                 data-name="{{ chofer.nombre|lower }}" 
-                 data-dni="{{ chofer.dni }}" 
-                 data-sector="{{ chofer.sector }}" 
-                 data-suc="{{ chofer.sucursal or '' }}">
-                <div class="card h-100 shadow-sm border-0">
-                    <div class="card-body text-center d-flex flex-column justify-content-between" style="min-height: 280px;">
-                        <div class="avatar-container">
-                            <img src="{{ url_for('imagen_chofer', dni=chofer.dni) }}" 
-                                 alt="Foto de {{ chofer.nombre }}" 
-                                 class="avatar-img"
-                                 onerror="this.onerror=null;this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTIwIiBoZWlnaHQ9IjEyMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTIwIiBoZWlnaHQ9IjEyMCIgZmlsbD0idmFyKC0tYm9yZGVyKSIgcng9IjYwIi8+PC9zdmc+';">
-                        </div>
-                        <h5 class="card-title">
-                            <span class="sector-icon">
-                                {% if chofer.sector == 'entrega' %} 🚚
-                                {% elif chofer.sector == 'almacén' %} 📦
-                                {% elif chofer.sector == 'administración' %} 🧾
-                                {% elif chofer.sector == 'mantenimiento' %} 🛠️
-                                {% else %} 👤
-                                {% endif %}
-                            </span>
-                            {{ chofer.nombre }}
-                        </h5>
-                        <p class="card-text mb-1">DNI: <strong>{{ chofer.dni }}</strong></p>
-                        <p class="card-text mb-1">Sucursal: <strong>{{ chofer.sucursal or '—' }}</strong></p>
-                        <p class="card-text">
-                            <span class="badge 
-                                {% if chofer.sector == 'entrega' %}bg-primary
-                                {% elif chofer.sector == 'almacén' %}bg-success
-                                {% elif chofer.sector == 'administración' %}bg-warning text-dark
-                                {% elif chofer.sector == 'mantenimiento' %}bg-secondary
-                                {% else %}bg-light text-dark
-                                {% endif %}">
-                                {{ chofer.sector | capitalize }}
-                            </span>
-                        </p>
-                        <div class="mt-3 d-flex justify-content-center gap-2">
-                            <a href="{{ url_for('editar_chofer', dni=chofer.dni) }}" class="btn btn-sm btn-warning-custom">
-                                <i class="fas fa-edit"></i>
-                                <span>Editar</span>
-                            </a>
-                            <button class="btn btn-sm btn-danger-custom" 
-                                    data-bs-toggle="modal" 
-                                    data-bs-target="#delModal"
-                                    data-dni="{{ chofer.dni }}"
-                                    data-name="{{ chofer.nombre }}">
-                                <i class="fas fa-trash-alt"></i>
-                                <span>Eliminar</span>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            {% endfor %}
-        </div>
+<div class="fade-in-up">
+  <!-- Header Section -->
+  <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 mb-4">
+    <div>
+      <h1 class="h4 mb-1 d-flex align-items-center gap-2">
+        <i class="bi bi-people-fill text-primary"></i>
+        Lista de Empleados
+      </h1>
+      <p class="text-muted mb-0">Gestiona la información de todos los empleados</p>
     </div>
 
-    <!-- Modal de eliminación -->
-    <div class="modal fade" id="delModal" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Eliminar empleado</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
-                </div>
-                <div class="modal-body">
-                    <p id="delTxt">¿Eliminar a [nombre]?</p>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <form id="delForm" method="POST">
-                        <button type="submit" class="btn btn-danger-custom">Eliminar</button>
-                    </form>
-                </div>
-            </div>
+    <div class="d-flex gap-2">
+      <button id="exportBtn" class="btn btn-outline-secondary" title="Exportar datos">
+        <i class="bi bi-download me-1"></i>
+        <span class="d-none d-sm-inline">Exportar</span>
+      </button>
+      <a href="{{ url_for('nuevo_chofer') }}" class="btn btn-primary">
+        <i class="bi bi-plus-circle me-1"></i>
+        <span class="d-none d-sm-inline">Nuevo </span>Empleado
+      </a>
+    </div>
+  </div>
+
+  <!-- Filters Section -->
+  <div class="card mb-4">
+    <div class="card-body">
+      <div class="row g-3">
+        <div class="col-12 col-md-6 col-lg-4">
+          <label for="search" class="form-label fw-semibold">Buscar empleado</label>
+          <div class="input-group">
+            <span class="input-group-text bg-light border-end-0">
+              <i class="bi bi-search text-muted"></i>
+            </span>
+            <input type="search" id="search" class="form-control border-start-0 ps-0"
+                   placeholder="Nombre, DNI o sucursal..." autocomplete="off">
+            <button type="button" class="btn btn-outline-secondary d-none d-lg-flex" id="clearSearch">
+              <i class="bi bi-x-lg"></i>
+            </button>
+          </div>
         </div>
+
+        <div class="col-12 col-md-6 col-lg-4">
+          <label for="sector" class="form-label fw-semibold">Sector</label>
+          <select id="sector" class="form-select">
+            <option value="">Todos los sectores</option>
+            <option value="entrega">🚚 Entrega</option>
+            <option value="almacén">📦 Almacén</option>
+            <option value="administración">🧾 Administración</option>
+            <option value="mantenimiento">🛠️ Mantenimiento</option>
+          </select>
+        </div>
+
+        <div class="col-12 col-md-6 col-lg-4">
+          <label for="sucursal" class="form-label fw-semibold">Sucursal</label>
+          <select id="sucursal" class="form-select">
+            <option value="">Todas las sucursales</option>
+            <option value="Casa Central">🏢 Casa Central</option>
+            <option value="Sucursal Norte">🏪 Sucursal Dolores</option>
+          </select>
+        </div>
+
+        <div class="col-12 col-md-6 col-lg-4 d-flex align-items-end">
+          <button type="button" id="clearFilters" class="btn btn-outline-secondary w-100">
+            <i class="bi bi-funnel-fill me-1"></i>
+            Limpiar filtros
+          </button>
+        </div>
+
+        <div class="col-12 col-md-6 col-lg-4 d-flex align-items-end justify-content-end">
+          <div class="btn-group w-100" role="group" aria-label="Vista">
+            <input type="radio" class="btn-check" name="view" id="gridView" checked>
+            <label class="btn btn-outline-secondary" for="gridView" title="Vista de cuadrícula">
+              <i class="bi bi-grid"></i>
+              <span class="d-none d-sm-inline ms-1">Cuadrícula</span>
+            </label>
+            <input type="radio" class="btn-check" name="view" id="listView">
+            <label class="btn btn-outline-secondary" for="listView" title="Vista de lista">
+              <i class="bi bi-list"></i>
+              <span class="d-none d-sm-inline ms-1">Lista</span>
+            </label>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Stats Section -->
+  <div class="row g-3 mb-4" id="statsSection">
+    <div class="col-12 col-sm-6 col-lg-3">
+      <div class="card h-100">
+        <div class="card-body text-center">
+          <div class="avatar bg-primary bg-opacity-10 rounded-circle mx-auto mb-3" style="width: 48px; height: 48px;">
+            <i class="bi bi-people-fill text-primary fs-4"></i>
+          </div>
+          <h3 class="h5 mb-1" id="totalCount">{{ choferes|length }}</h3>
+          <p class="text-muted mb-0 small">Total empleados</p>
+        </div>
+      </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script>
-        // Tema oscuro/claro
-        document.addEventListener('DOMContentLoaded', function() {
-            const themeToggle = document.getElementById('themeToggle');
-            const themeIcon = document.getElementById('themeIcon');
-            const body = document.body;
-            
-            // Cargar tema guardado o usar preferencia del sistema
-            const savedTheme = localStorage.getItem('theme');
-            const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-            
-            if (savedTheme === 'dark' || (!savedTheme && systemPrefersDark)) {
-                body.setAttribute('data-theme', 'dark');
-                themeIcon.className = 'fas fa-sun';
-            }
-            
-            // Alternar tema
-            themeToggle.addEventListener('click', function() {
-                const isDark = body.getAttribute('data-theme') === 'dark';
-                body.setAttribute('data-theme', isDark ? 'light' : 'dark');
-                themeIcon.className = isDark ? 'fas fa-moon' : 'fas fa-sun';
-                localStorage.setItem('theme', isDark ? 'light' : 'dark');
-            });
-            
-            // Filtrado
-            const search = document.getElementById('search');
-            const sector = document.getElementById('sector');
-            const sucursal = document.getElementById('sucursal');
-            const countTxt = document.getElementById('countTxt');
-            const empCards = document.querySelectorAll('.emp-card');
-            
-            function filterEmployees() {
-                const searchTerm = search.value.toLowerCase();
-                const sectorValue = sector.value;
-                const sucursalValue = sucursal.value;
-                let visibleCount = 0;
-                
-                empCards.forEach(card => {
-                    const name = card.dataset.name;
-                    const dni = card.dataset.dni;
-                    const cardSector = card.dataset.sector;
-                    const cardSucursal = card.dataset.suc;
-                    
-                    const matchesSearch = name.includes(searchTerm) || dni.includes(searchTerm) || cardSucursal.toLowerCase().includes(searchTerm);
-                    const matchesSector = !sectorValue || cardSector === sectorValue;
-                    const matchesSucursal = !sucursalValue || cardSucursal === sucursalValue;
-                    
-                    if (matchesSearch && matchesSector && matchesSucursal) {
-                        card.style.display = '';
-                        visibleCount++;
-                    } else {
-                        card.style.display = 'none';
-                    }
-                });
-                
-                countTxt.textContent = `${visibleCount} empleado${visibleCount !== 1 ? 's' : ''}`;
-            }
-            
-            // Event listeners para filtros
-            search.addEventListener('input', filterEmployees);
-            sector.addEventListener('change', filterEmployees);
-            sucursal.addEventListener('change', filterEmployees);
-            document.querySelector('[type="reset"]').addEventListener('click', function() {
-                search.value = '';
-                sector.value = '';
-                sucursal.value = '';
-                filterEmployees();
-            });
-            
-            // Modal de eliminación
-            const delModal = document.getElementById('delModal');
-            if (delModal) {
-                delModal.addEventListener('show.bs.modal', function(event) {
-                    const button = event.relatedTarget;
-                    const dni = button.getAttribute('data-dni');
-                    const name = button.getAttribute('data-name');
-                    
-                    document.getElementById('delTxt').textContent = `¿Eliminar a ${name}?`;
-                    document.getElementById('delForm').setAttribute('action', `/eliminar_chofer/${dni}`);
-                });
-            }
+    <div class="col-12 col-sm-6 col-lg-3">
+      <div class="card h-100">
+        <div class="card-body text-center">
+          <div class="avatar bg-success bg-opacity-10 rounded-circle mx-auto mb-3" style="width: 48px; height: 48px;">
+            <i class="bi bi-truck text-success fs-4"></i>
+          </div>
+          <h3 class="h5 mb-1" id="entregaCount">{{ choferes|selectattr('sector', 'equalto', 'entrega')|list|length }}</h3>
+          <p class="text-muted mb-0 small">Entrega</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-sm-6 col-lg-3">
+      <div class="card h-100">
+        <div class="card-body text-center">
+          <div class="avatar bg-warning bg-opacity-10 rounded-circle mx-auto mb-3" style="width: 48px; height: 48px;">
+            <i class="bi bi-box-seam text-warning fs-4"></i>
+          </div>
+          <h3 class="h5 mb-1" id="almacenCount">{{ choferes|selectattr('sector', 'equalto', 'almacén')|list|length }}</h3>
+          <p class="text-muted mb-0 small">Almacén</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-sm-6 col-lg-3">
+      <div class="card h-100">
+        <div class="card-body text-center">
+          <div class="avatar bg-info bg-opacity-10 rounded-circle mx-auto mb-3" style="width: 48px; height: 48px;">
+            <i class="bi bi-building text-info fs-4"></i>
+          </div>
+          <h3 class="h5 mb-1" id="casaCentralCount">{{ choferes|selectattr('sucursal', 'equalto', 'Casa Central')|list|length }}</h3>
+          <p class="text-muted mb-0 small">Casa Central</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Employees Grid View -->
+  <div class="row g-3" id="gridView">
+    {% for chofer in choferes %}
+    <div class="col-12 col-sm-6 col-md-4 col-lg-3 emp-card fade-in-up"
+         data-name="{{ chofer.nombre|lower }}"
+         data-dni="{{ chofer.dni }}"
+         data-sector="{{ chofer.sector }}"
+         data-sucursal="{{ chofer.sucursal or '' }}"
+         style="animation-delay: {{ loop.index * 0.1 }}s;">
+      <div class="card h-100 shadow-sm hover-lift">
+        <div class="card-body text-center d-flex flex-column">
+          <!-- Avatar -->
+          <div class="avatar-container mb-3">
+            <div class="avatar-wrapper position-relative mx-auto">
+              <img src="{{ url_for('imagen_chofer', dni=chofer.dni) }}"
+                   alt="Foto de {{ chofer.nombre }}"
+                   class="avatar-img rounded-circle"
+                   onerror="this.onerror=null;this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTIwIiBoZWlnaHQ9IjEyMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTIwIiBoZWlnaHQ9IjEyMCIgZmlsbD0iI2YxZjVmOSIgcng9IjYwIi8+PHRleHQgeD0iNjAiIHk9IjY1IiBmb250LXNpemU9IjQwIiBmaWxsPSIjOWNhM2FmIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5VUzwvdGV4dD48L3N2Zz4=';">
+                <div class="avatar-placeholder">
+                  {{ chofer.nombre[0].upper() }}
+                </div>
+              </img>
+            </div>
+          </div>
+
+          <!-- Info -->
+          <div class="flex-grow-1">
+            <h6 class="card-title mb-2 fw-bold">{{ chofer.nombre }}</h6>
+            <p class="card-text small text-muted mb-1">
+              <i class="bi bi-person-badge me-1"></i>
+              DNI: <strong>{{ chofer.dni }}</strong>
+            </p>
+            <p class="card-text small text-muted mb-2">
+              <i class="bi bi-geo-alt me-1"></i>
+              {{ chofer.sucursal or 'Sin sucursal' }}
+            </p>
+
+            <!-- Sector Badge -->
+            <div class="sector-badge mb-3">
+              {% if chofer.sector == 'entrega' %}
+                <span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25">
+                  <i class="bi bi-truck me-1"></i>Entrega
+                </span>
+              {% elif chofer.sector == 'almacén' %}
+                <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25">
+                  <i class="bi bi-box-seam me-1"></i>Almacén
+                </span>
+              {% elif chofer.sector == 'administración' %}
+                <span class="badge bg-warning bg-opacity-10 text-warning border border-warning border-opacity-25">
+                  <i class="bi bi-clipboard-data me-1"></i>Administración
+                </span>
+              {% elif chofer.sector == 'mantenimiento' %}
+                <span class="badge bg-secondary bg-opacity-10 text-secondary border border-secondary border-opacity-25">
+                  <i class="bi bi-tools me-1"></i>Mantenimiento
+                </span>
+              {% else %}
+                <span class="badge bg-light text-dark border">
+                  <i class="bi bi-person me-1"></i>{{ chofer.sector | capitalize }}
+                </span>
+              {% endif %}
+            </div>
+          </div>
+
+          <!-- Actions -->
+          <div class="d-flex gap-2 mt-auto">
+            <a href="{{ url_for('editar_chofer', dni=chofer.dni) }}"
+               class="btn btn-outline-primary btn-sm flex-fill"
+               title="Editar empleado">
+              <i class="bi bi-pencil me-1"></i>
+              <span class="d-none d-sm-inline">Editar</span>
+            </a>
+            <button class="btn btn-outline-danger btn-sm flex-fill"
+                    data-bs-toggle="modal"
+                    data-bs-target="#deleteModal"
+                    data-dni="{{ chofer.dni }}"
+                    data-name="{{ chofer.nombre }}"
+                    title="Eliminar empleado">
+              <i class="bi bi-trash me-1"></i>
+              <span class="d-none d-sm-inline">Eliminar</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+    </div>
+
+  <!-- Delete Confirmation Modal -->
+  <div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="deleteModalLabel">
+            <i class="bi bi-exclamation-triangle text-danger me-2"></i>
+            Confirmar eliminación
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+        </div>
+        <div class="modal-body">
+          <div class="text-center mb-3">
+            <div class="avatar bg-danger bg-opacity-10 rounded-circle mx-auto mb-3" style="width: 64px; height: 64px;">
+              <i class="bi bi-person-x text-danger fs-2"></i>
+            </div>
+            <p class="mb-1">¿Estás seguro de que deseas eliminar a este empleado?</p>
+            <p class="text-muted mb-0" id="deleteEmployeeName">Esta acción no se puede deshacer.</p>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
+            <i class="bi bi-x-circle me-1"></i>
+            Cancelar
+          </button>
+          <form id="deleteForm" method="POST" class="d-inline">
+            <button type="submit" class="btn btn-danger">
+              <i class="bi bi-trash me-1"></i>
+              Eliminar empleado
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+  </div>
+
+  <style>
+    /* Avatar Styles */
+    .avatar-wrapper {
+      position: relative;
+      width: 80px;
+      height: 80px;
+    }
+
+    .avatar-img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      border: 3px solid var(--border-color);
+      transition: all var(--transition-fast);
+    }
+
+    .avatar-placeholder {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-weight: 600;
+      font-size: 1.5rem;
+      color: var(--text-muted);
+    }
+
+    .avatar-wrapper:hover .avatar-img {
+      border-color: var(--primary-color);
+      transform: scale(1.05);
+    }
+
+    /* Card Hover Effects */
+    .hover-lift {
+      transition: all var(--transition-fast);
+    }
+
+    .hover-lift:hover {
+      transform: translateY(-4px);
+      box-shadow: var(--shadow-lg) !important;
+    }
+
+    /* Sector Badges */
+    .sector-badge .badge {
+      font-size: 0.75rem;
+      padding: 0.375rem 0.75rem;
+    }
+
+    /* View Toggle */
+    #gridView, #listView {
+      transition: opacity var(--transition-normal);
+    }
+
+    #gridView.fade-out, #listView.fade-out {
+      opacity: 0;
+    }
+
+    /* Stats Cards */
+    #statsSection .card {
+      transition: all var(--transition-fast);
+    }
+
+    #statsSection .card:hover {
+      transform: translateY(-2px);
+    }
+
+    /* Responsive Adjustments */
+    @media (max-width: 768px) {
+      .avatar-wrapper {
+        width: 60px;
+        height: 60px;
+      }
+
+      .sector-badge {
+        margin-bottom: 1rem !important;
+      }
+
+      #statsSection .card .avatar {
+        width: 40px !important;
+        height: 40px !important;
+      }
+
+      #statsSection .card h3 {
+        font-size: 1.25rem !important;
+      }
+    }
+
+    @media (max-width: 576px) {
+      .btn-group .btn {
+        padding: 0.25rem 0.5rem;
+      }
+
+      .btn-group .btn span {
+        display: none !important;
+      }
+    }
+
+    /* Loading Animation */
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .fade-in-up {
+      animation: fadeInUp 0.6s ease-out forwards;
+      opacity: 0;
+    }
+
+    /* Export Button */
+    #exportBtn {
+      position: relative;
+      overflow: hidden;
+    }
+
+    #exportBtn::before {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 0;
+      height: 0;
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      transition: width 0.3s, height 0.3s;
+    }
+
+    #exportBtn:active::before {
+      width: 300px;
+      height: 300px;
+    }
+  </style>
+
+  {% endblock %}
+
+  {% block scripts %}
+  <script>
+    // Employee Management Class
+    class EmployeeManager {
+      constructor() {
+        this.searchInput = document.getElementById('search');
+        this.sectorSelect = document.getElementById('sector');
+        this.sucursalSelect = document.getElementById('sucursal');
+        this.clearFiltersBtn = document.getElementById('clearFilters');
+        this.clearSearchBtn = document.getElementById('clearSearch');
+        this.exportBtn = document.getElementById('exportBtn');
+        this.gridView = document.getElementById('gridView');
+        this.employeeCards = document.querySelectorAll('.emp-card');
+        this.statsSection = document.getElementById('statsSection');
+
+        this.init();
+      }
+
+      init() {
+        this.setupEventListeners();
+        this.updateStats();
+        this.setupDeleteModal();
+        this.setupExport();
+      }
+
+      setupEventListeners() {
+        // Search and filters
+        this.searchInput?.addEventListener('input', () => this.filterEmployees());
+        this.sectorSelect?.addEventListener('change', () => this.filterEmployees());
+        this.sucursalSelect?.addEventListener('change', () => this.filterEmployees());
+
+        // Clear buttons
+        this.clearFiltersBtn?.addEventListener('click', () => this.clearAllFilters());
+        this.clearSearchBtn?.addEventListener('click', () => this.clearSearch());
+
+        // Enter key in search
+        this.searchInput?.addEventListener('keypress', (e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            this.filterEmployees();
+          }
         });
-    </script>
+      }
+
+      filterEmployees() {
+        const searchTerm = this.searchInput?.value.toLowerCase().trim() || '';
+        const sectorValue = this.sectorSelect?.value || '';
+        const sucursalValue = this.sucursalSelect?.value || '';
+
+        let visibleCount = 0;
+
+        this.employeeCards.forEach(card => {
+          const name = card.dataset.name || '';
+          const dni = card.dataset.dni || '';
+          const sector = card.dataset.sector || '';
+          const sucursal = card.dataset.sucursal || '';
+
+          const matchesSearch = !searchTerm ||
+            name.includes(searchTerm) ||
+            dni.includes(searchTerm) ||
+            sucursal.toLowerCase().includes(searchTerm);
+
+          const matchesSector = !sectorValue || sector === sectorValue;
+          const matchesSucursal = !sucursalValue || sucursal === sucursalValue;
+
+          const isVisible = matchesSearch && matchesSector && matchesSucursal;
+
+          card.style.display = isVisible ? '' : 'none';
+          if (isVisible) visibleCount++;
+        });
+
+        this.updateStats();
+      }
+
+      clearAllFilters() {
+        this.searchInput.value = '';
+        this.sectorSelect.value = '';
+        this.sucursalSelect.value = '';
+        this.filterEmployees();
+      }
+
+      clearSearch() {
+        this.searchInput.value = '';
+        this.filterEmployees();
+      }
+
+      updateStats() {
+        const visibleCards = Array.from(this.employeeCards).filter(card =>
+          card.style.display !== 'none'
+        );
+
+        // Update total count
+        const totalElement = document.getElementById('totalCount');
+        if (totalElement) {
+          totalElement.textContent = visibleCards.length;
+        }
+
+        // Update sector counts
+        const sectorCounts = {
+          entrega: visibleCards.filter(card => card.dataset.sector === 'entrega').length,
+          almacen: visibleCards.filter(card => card.dataset.sector === 'almacén').length,
+          casaCentral: visibleCards.filter(card => card.dataset.sucursal === 'Casa Central').length
+        };
+
+        document.getElementById('entregaCount').textContent = sectorCounts.entrega;
+        document.getElementById('almacenCount').textContent = sectorCounts.almacen;
+        document.getElementById('casaCentralCount').textContent = sectorCounts.casaCentral;
+      }
+
+      setupDeleteModal() {
+        const deleteModal = document.getElementById('deleteModal');
+        if (!deleteModal) return;
+
+        deleteModal.addEventListener('show.bs.modal', (event) => {
+          const button = event.relatedTarget;
+          const dni = button.getAttribute('data-dni');
+          const name = button.getAttribute('data-name');
+
+          console.log('Opening delete modal for:', { dni, name });
+
+          const nameElement = document.getElementById('deleteEmployeeName');
+          const form = document.getElementById('deleteForm');
+
+          if (nameElement) {
+            nameElement.textContent = name || 'este empleado';
+          }
+
+          if (form && dni) {
+            // Asegurar que el DNI esté limpio y la URL correcta
+            const cleanDni = dni.toString().trim();
+            form.action = `/admin/choferes/eliminar/${encodeURIComponent(cleanDni)}`;
+            form.method = 'POST'; // Asegurar método POST
+            console.log('Delete form action set to:', form.action);
+          } else {
+            console.error('Form or DNI missing:', { form: !!form, dni });
+          }
+        });
+
+        // Agregar listener al botón de eliminar para debugging
+        const deleteBtn = document.querySelector('#deleteForm button[type="submit"]');
+        if (deleteBtn) {
+          deleteBtn.addEventListener('click', (e) => {
+            const form = document.getElementById('deleteForm');
+            console.log('Delete button clicked, form action:', form?.action);
+            console.log('Form method:', form?.method);
+
+            // Verificar si el formulario tiene el campo CSRF si es necesario
+            const csrfToken = form.querySelector('input[name="csrf_token"]');
+            if (csrfToken) {
+              console.log('CSRF token found:', csrfToken.value ? 'present' : 'empty');
+            } else {
+              console.log('No CSRF token found');
+            }
+          });
+        }
+
+        // Agregar listener para cuando se oculta el modal (reset)
+        deleteModal.addEventListener('hidden.bs.modal', () => {
+          const form = document.getElementById('deleteForm');
+          if (form) {
+            form.action = ''; // Limpiar action para evitar problemas
+          }
+        });
+      }
+
+      setupExport() {
+        this.exportBtn?.addEventListener('click', () => {
+          // Show loading state
+          const originalText = this.exportBtn.innerHTML;
+          this.exportBtn.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>Exportando...';
+          this.exportBtn.disabled = true;
+
+          // Simulate export (replace with actual export logic)
+          setTimeout(() => {
+            // Create and download CSV
+            const visibleCards = Array.from(this.employeeCards).filter(card =>
+              card.style.display !== 'none'
+            );
+
+            const csvData = [
+              ['Nombre', 'DNI', 'Sector', 'Sucursal'],
+              ...visibleCards.map(card => [
+                card.dataset.name,
+                card.dataset.dni,
+                card.dataset.sector,
+                card.dataset.sucursal
+              ])
+            ];
+
+            const csvContent = csvData.map(row =>
+              row.map(field => `"${field}"`).join(',')
+            ).join('\n');
+
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `empleados_${new Date().toISOString().split('T')[0]}.csv`;
+            link.click();
+
+            // Restore button
+            this.exportBtn.innerHTML = originalText;
+            this.exportBtn.disabled = false;
+
+            // Show success message
+            this.showToast('Datos exportados correctamente', 'success');
+          }, 1000);
+        });
+      }
+
+      showToast(message, type = 'info') {
+        // Create toast element
+        const toast = document.createElement('div');
+        toast.className = `toast align-items-center text-white bg-${type} border-0`;
+        toast.setAttribute('role', 'alert');
+        toast.innerHTML = `
+          <div class="d-flex">
+            <div class="toast-body">${message}</div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+          </div>
+        `;
+
+        // Add to container
+        const container = document.querySelector('.toast-container') || this.createToastContainer();
+        container.appendChild(toast);
+
+        // Show toast
+        const bsToast = new bootstrap.Toast(toast);
+        bsToast.show();
+
+        // Remove after hide
+        toast.addEventListener('hidden.bs.toast', () => {
+          toast.remove();
+        });
+      }
+
+      createToastContainer() {
+        const container = document.createElement('div');
+        container.className = 'toast-container position-fixed top-0 end-0 p-3';
+        container.style.zIndex = '9999';
+        document.body.appendChild(container);
+        return container;
+      }
+    }
+
+    // Initialize when DOM is ready
+    document.addEventListener('DOMContentLoaded', () => {
+      new EmployeeManager();
+    });
+  </script>
 {% endblock %}

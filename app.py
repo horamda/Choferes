@@ -110,7 +110,249 @@ def jwt_required_api(f):
 
 
 def get_connection():
-    return mysql.connector.connect(**MYSQL_CONFIG)
+    """Obtiene una conexión a la base de datos con configuración robusta."""
+    try:
+        conn = mysql.connector.connect(**MYSQL_CONFIG)
+        # Configurar la conexión para mejor manejo de errores
+        conn.autocommit = False
+        return conn
+    except mysql.connector.Error as err:
+        logger.error(f"Error connecting to database: {err}")
+        raise
+
+def check_database_locks():
+    """Verifica si hay locks activos en la base de datos."""
+    conn = None
+    cursor = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        # Verificar procesos bloqueados (solo si tenemos permisos)
+        cursor.execute("""
+            SELECT
+                r.trx_id waiting_trx_id,
+                r.trx_mysql_thread_id waiting_thread,
+                r.trx_query waiting_query,
+                b.trx_id blocking_trx_id,
+                b.trx_mysql_thread_id blocking_thread,
+                b.trx_query blocking_query
+            FROM information_schema.innodb_lock_waits w
+            INNER JOIN information_schema.innodb_trx b ON b.trx_id = w.blocking_trx_id
+            INNER JOIN information_schema.innodb_trx r ON r.trx_id = w.requesting_trx_id
+        """)
+
+        locks = cursor.fetchall()
+        if locks:
+            logger.warning(f"Active database locks found: {len(locks)} lock(s)")
+            for lock in locks:
+                logger.warning(f"Lock: {lock}")
+        else:
+            logger.info("No active database locks found")
+
+        return locks
+
+    except mysql.connector.errors.DatabaseError as db_err:
+        if "PROCESS" in str(db_err) or "Access denied" in str(db_err):
+            logger.info("Cannot check database locks: insufficient privileges (PROCESS permission required)")
+            return []
+        else:
+            logger.error(f"Database error checking locks: {db_err}")
+            return []
+    except Exception as e:
+        logger.error(f"Error checking database locks: {e}")
+        return []
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+def force_unlock_blocking_transactions():
+    """
+    Fuerza liberación de transacciones bloqueadoras.
+    Como experto en DB, esta función identifica y mata transacciones que están bloqueando.
+    """
+    logger.info("🔧 Intentando liberar transacciones bloqueadoras...")
+
+    admin_conn = None
+    admin_cursor = None
+
+    try:
+        # Crear conexión administrativa
+        admin_conn = get_connection()
+        admin_cursor = admin_conn.cursor()
+
+        # 1. Identificar transacciones bloqueadoras
+        admin_cursor.execute("""
+            SELECT DISTINCT
+                b.trx_mysql_thread_id as blocking_thread,
+                b.trx_id as blocking_trx_id,
+                b.trx_started as started_time,
+                TIMESTAMPDIFF(SECOND, b.trx_started, NOW()) as duration_seconds
+            FROM information_schema.innodb_lock_waits w
+            INNER JOIN information_schema.innodb_trx b ON b.trx_id = w.blocking_trx_id
+            WHERE TIMESTAMPDIFF(SECOND, b.trx_started, NOW()) > 30  -- Transacciones > 30 segundos
+        """)
+
+        blocking_transactions = admin_cursor.fetchall()
+
+        if not blocking_transactions:
+            logger.info("✅ No se encontraron transacciones bloqueadoras activas")
+            return True
+
+        logger.warning(f"🚨 Encontradas {len(blocking_transactions)} transacciones bloqueadoras")
+
+        # 2. Kill transacciones bloqueadoras (con precaución)
+        killed_count = 0
+        for trx in blocking_transactions:
+            thread_id = trx[0]
+            trx_id = trx[1]
+            duration = trx[3]
+
+            try:
+                logger.warning(f"Killing blocking transaction - Thread: {thread_id}, Duration: {duration}s")
+                admin_cursor.execute(f"KILL {thread_id}")
+                killed_count += 1
+
+                # Log detallado
+                logger.info(f"✅ Killed blocking transaction {trx_id} (thread {thread_id})")
+
+            except Exception as kill_err:
+                logger.error(f"❌ Error killing transaction {trx_id}: {kill_err}")
+
+        if killed_count > 0:
+            logger.info(f"🎯 Liberadas {killed_count} transacciones bloqueadoras")
+            # Esperar un momento para que se liberen los locks
+            import time
+            time.sleep(0.5)
+            return True
+        else:
+            logger.warning("⚠️ No se pudieron liberar transacciones bloqueadoras")
+            return False
+
+    except mysql.connector.errors.DatabaseError as db_err:
+        if "PROCESS" in str(db_err) or "Access denied" in str(db_err):
+            logger.warning("⚠️ Sin permisos PROCESS - no se pueden liberar locks automáticamente")
+            logger.info("💡 Solución manual: Ejecutar 'SHOW PROCESSLIST' y 'KILL [thread_id]' en phpMyAdmin")
+            return False
+        else:
+            logger.error(f"❌ Error de DB liberando locks: {db_err}")
+            return False
+
+    except Exception as e:
+        logger.error(f"❌ Error liberando transacciones bloqueadoras: {e}")
+        return False
+
+    finally:
+        if admin_cursor:
+            try:
+                admin_cursor.close()
+            except:
+                pass
+        if admin_conn:
+            try:
+                admin_conn.close()
+            except:
+                pass
+
+def diagnose_lock_issue(table_name, column_name, value):
+    """
+    Diagnóstico avanzado de problemas de lock en un registro específico.
+    Como experto en DB, proporciona análisis detallado del problema.
+    """
+    logger.info(f"🔍 Diagnosticando lock en {table_name}.{column_name} = {value}")
+
+    try:
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        # 1. Verificar si el registro existe
+        cursor.execute(f"SELECT COUNT(*) as count FROM {table_name} WHERE {column_name} = %s", (value,))
+        exists = cursor.fetchone()['count'] > 0
+
+        if not exists:
+            logger.info(f"ℹ️ El registro {value} no existe en {table_name}")
+            return {"issue": "record_not_found", "exists": False}
+
+        # 2. Verificar locks específicos en este registro (compatible con versiones anteriores de MySQL)
+        try:
+            cursor.execute("""
+                SELECT
+                    lk.lock_type,
+                    lk.lock_mode,
+                    lk.lock_table,
+                    trx.trx_id,
+                    trx.trx_state,
+                    trx.trx_mysql_thread_id,
+                    TIMESTAMPDIFF(SECOND, trx.trx_started, NOW()) as duration
+                FROM information_schema.innodb_lock_waits w
+                RIGHT JOIN information_schema.innodb_locks lk ON w.requesting_trx_id = lk.lock_trx_id
+                LEFT JOIN information_schema.innodb_trx trx ON lk.lock_trx_id = trx.trx_id
+                WHERE lk.lock_table LIKE %s
+            """, (f"%{table_name}%",))
+        except mysql.connector.errors.DatabaseError:
+            # Fallback para versiones de MySQL que no tienen innodb_locks
+            logger.info("ℹ️ Tabla innodb_locks no disponible, usando diagnóstico básico")
+            cursor.execute("""
+                SELECT
+                    trx_id,
+                    trx_state,
+                    trx_mysql_thread_id,
+                    TIMESTAMPDIFF(SECOND, trx_started, NOW()) as duration
+                FROM information_schema.innodb_trx
+                WHERE trx_state = 'RUNNING'
+            """)
+
+        locks = cursor.fetchall()
+
+        # 3. Verificar transacciones activas relacionadas
+        cursor.execute("""
+            SELECT
+                trx_id,
+                trx_state,
+                trx_started,
+                trx_mysql_thread_id,
+                trx_query,
+                TIMESTAMPDIFF(SECOND, trx_started, NOW()) as duration
+            FROM information_schema.innodb_trx
+            WHERE trx_state = 'RUNNING' AND TIMESTAMPDIFF(SECOND, trx_started, NOW()) > 10
+        """)
+
+        active_trx = cursor.fetchall()
+
+        diagnosis = {
+            "issue": "lock_detected" if locks else "no_locks_found",
+            "exists": True,
+            "locks_found": len(locks),
+            "active_transactions": len(active_trx),
+            "locks": locks,
+            "transactions": active_trx
+        }
+
+        if locks:
+            logger.warning(f"🚨 Locks encontrados: {len(locks)}")
+            for lock in locks:
+                logger.warning(f"Lock: {lock}")
+        else:
+            logger.info("✅ No se encontraron locks específicos")
+
+        if active_trx:
+            logger.warning(f"📊 Transacciones activas: {len(active_trx)}")
+            for trx in active_trx:
+                logger.warning(f"TRX: {trx}")
+
+        return diagnosis
+
+    except Exception as e:
+        logger.error(f"❌ Error en diagnóstico: {e}")
+        return {"issue": "diagnostic_error", "error": str(e)}
+
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 
 def login_required(f):
     @wraps(f)
@@ -270,50 +512,343 @@ def dashboard():
 @login_required
 def panel():
     if request.method == 'POST':
-        dni = request.form['dni'].strip()
-        mensaje = request.form['mensaje'].strip()
+        # Handle both single DNI (legacy) and multiple DNIs (new)
+        dnis = request.form.getlist('dnis')  # New way: multiple DNIs
+        dni_single = request.form.get('dni')  # Legacy way: single DNI
 
-        if not dni or not mensaje:
-            flash("❌ Todos los campos son obligatorios", "danger")
-
-        elif not dni.isdigit() or not (7 <= len(dni) <= 8):
-            flash("⚠️ El DNI debe tener entre 7 y 8 dígitos numéricos", "warning")
-
+        if dnis:
+            # New way: multiple DNIs
+            dnis_list = [d.strip() for d in dnis if d.strip()]
+        elif dni_single:
+            # Legacy way: single DNI
+            dnis_list = [dni_single.strip()]
         else:
-            try:
-                conn = get_connection()
-                cursor = conn.cursor()
+            dnis_list = []
 
-                # Insertar el aviso
-                cursor.execute("INSERT INTO avisos (dni, mensaje) VALUES (%s, %s)", (dni, mensaje))
-                conn.commit()
+        mensaje = request.form.get('mensaje', '').strip()
 
-                # Buscar el token
-                cursor.execute("SELECT token FROM tokens WHERE dni = %s", (dni,))
-                result = cursor.fetchone()
+        if not dnis_list or not mensaje:
+            return jsonify({"success": False, "message": "Todos los campos son obligatorios"}), 400
 
-                if result and result[0]:
-                    token = result[0]
-                    enviar_push(token, "📢 Nuevo aviso", mensaje)
+        # Validate all DNIs
+        invalid_dnis = []
+        for dni in dnis_list:
+            if not dni.isdigit() or not (7 <= len(dni) <= 8):
+                invalid_dnis.append(dni)
 
-                flash("✅ Aviso enviado correctamente", "success")
+        if invalid_dnis:
+            return jsonify({"success": False, "message": f"DNIs inválidos: {', '.join(invalid_dnis)}. Deben tener entre 7 y 8 dígitos numéricos"}), 400
 
-            except Exception as e:
-                flash(f"❌ Error al enviar aviso: {str(e)}", "danger")
+        # Nueva estrategia: Procesar mensajes y push notifications por separado
+        # para evitar conflictos de locks complejos
 
-            finally:
-                cursor.close()
-                conn.close()
+        sent_count = 0
+        failed_count = 0
+        push_sent_count = 0
+        push_failed_count = 0
 
-    # Obtener últimos 10 avisos
+        logger.info(f"Sending message to {len(dnis_list)} employees: {dnis_list}")
+
+        # FASE 1: Guardar mensajes en DB (sistema experto anti-locks)
+        logger.info("=== FASE 1: Guardando mensajes en DB (Sistema Experto Anti-Locks) ===")
+
+        # PASO 1: Diagnóstico proactivo de locks
+        locks_before = check_database_locks()
+        if locks_before:
+            logger.warning(f"🚨 Locks detectados ANTES de procesar: {len(locks_before)}")
+
+            # Intentar liberación automática de locks bloqueadores
+            unlock_success = force_unlock_blocking_transactions()
+            if unlock_success:
+                logger.info("✅ Liberación automática de locks exitosa")
+            else:
+                logger.warning("⚠️ No se pudieron liberar locks automáticamente")
+
+        # PASO 2: Procesar cada empleado con estrategia experta
+        messages_saved = []
+        problematic_dnis = []  # DNIs con problemas persistentes
+
+        for dni in dnis_list:
+            employee_conn = None
+            employee_cursor = None
+
+            # Estrategia experta de recuperación múltiple
+            max_attempts = 3
+            success = False
+            diagnosis_done = False
+
+            for attempt in range(max_attempts):
+                try:
+                    logger.info(f"Procesando DNI: {dni} (intento {attempt + 1}/{max_attempts})")
+
+                    # Conexión individual por empleado
+                    employee_conn = get_connection()
+                    employee_cursor = employee_conn.cursor()
+
+                    # Configuración experta anti-locks
+                    employee_cursor.execute("SET SESSION innodb_lock_wait_timeout = 2")
+                    employee_cursor.execute("SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED")
+
+                    # PASO 3: Diagnóstico específico si es el último intento
+                    if attempt == max_attempts - 1 and not diagnosis_done:
+                        diagnosis = diagnose_lock_issue('avisos', 'dni', dni)
+                        if diagnosis['issue'] == 'lock_detected':
+                            logger.warning(f"🔍 Diagnóstico: Lock persistente en DNI {dni}")
+                            # Intentar liberación específica una vez más
+                            unlock_success = force_unlock_blocking_transactions()
+                            if unlock_success:
+                                logger.info(f"🔧 Liberación específica exitosa para DNI {dni}")
+                                diagnosis_done = True
+                        elif diagnosis['issue'] == 'record_not_found':
+                            logger.warning(f"ℹ️ DNI {dni} no existe en avisos - puede ser lock en otra tabla")
+
+                    # PASO 4: Técnica de liberación de locks
+                    if attempt > 0:
+                        try:
+                            # Técnica 1: SELECT FOR UPDATE NOWAIT
+                            employee_cursor.execute("SELECT 1 FROM avisos WHERE dni = %s FOR UPDATE NOWAIT", (dni,))
+                            result = employee_cursor.fetchone()
+                            logger.info(f"🔓 Lock liberado para DNI {dni} en intento {attempt + 1}")
+
+                        except mysql.connector.errors.DatabaseError as lock_err:
+                            if "Lock wait timeout" in str(lock_err):
+                                logger.warning(f"⏳ Lock aún activo para DNI {dni} en intento {attempt + 1}")
+                                # Técnica 2: Intentar con tabla relacionada
+                                try:
+                                    employee_cursor.execute("SELECT 1 FROM choferes WHERE dni = %s FOR UPDATE NOWAIT", (dni,))
+                                    employee_cursor.fetchone()
+                                    logger.info(f"🔓 Lock liberado en tabla relacionada para DNI {dni}")
+                                except:
+                                    pass
+                            else:
+                                logger.warning(f"Error específico de lock para DNI {dni}: {lock_err}")
+
+                    # PASO 5: Intentar la inserción final
+                    employee_cursor.execute("INSERT INTO avisos (dni, mensaje) VALUES (%s, %s)", (dni, mensaje))
+                    employee_conn.commit()
+
+                    messages_saved.append(dni)
+                    logger.info(f"✅ Mensaje guardado exitosamente para DNI: {dni}")
+                    success = True
+                    break
+
+                except mysql.connector.errors.DatabaseError as db_err:
+                    error_msg = str(db_err)
+                    if "Lock wait timeout" in error_msg:
+                        if attempt < max_attempts - 1:
+                            wait_time = 1 if attempt == 0 else 0.5
+                            logger.warning(f"⏰ Lock timeout DNI {dni} (intento {attempt + 1}), esperando {wait_time}s...")
+                            import time
+                            time.sleep(wait_time)
+                            continue
+                        else:
+                            logger.error(f"⏰ Lock timeout PERSISTENTE para DNI {dni} - {max_attempts} intentos agotados")
+                            problematic_dnis.append(dni)
+                    elif "deadlock" in error_msg.lower():
+                        if attempt < max_attempts - 1:
+                            logger.warning(f"🔄 Deadlock DNI {dni} (intento {attempt + 1}), reintentando...")
+                            import time
+                            time.sleep(0.5)
+                            continue
+                        else:
+                            logger.error(f"🔄 Deadlock PERSISTENTE para DNI {dni} - {max_attempts} intentos agotados")
+                            problematic_dnis.append(dni)
+                    else:
+                        logger.error(f"❌ Error de DB para DNI {dni}: {error_msg}")
+                        break
+
+                except Exception as e:
+                    logger.error(f"❌ Error inesperado procesando DNI {dni}: {e}")
+                    break
+
+                finally:
+                    # Cerrar conexión individual después de cada intento
+                    if employee_cursor:
+                        try:
+                            employee_cursor.close()
+                        except:
+                            pass
+                    if employee_conn:
+                        try:
+                            employee_conn.close()
+                        except:
+                            pass
+
+            if not success:
+                logger.error(f"❌ No se pudo procesar DNI {dni} después de {max_attempts} intentos")
+                failed_count += 1
+
+        sent_count = len(messages_saved)
+        logger.info(f"=== FASE 1 COMPLETADA: {sent_count} mensajes guardados, {failed_count} fallidos ===")
+
+        # PASO 6: Reporte final de diagnóstico
+        if problematic_dnis:
+            logger.warning(f"🚨 DNIs con problemas persistentes: {problematic_dnis}")
+            logger.info("💡 Recomendación: Revisar conexiones abiertas en phpMyAdmin")
+            logger.info("💡 Ejecutar: SHOW PROCESSLIST; y KILL [thread_id];")
+
+        # FASE 2: Enviar push notifications (operación separada, no crítica)
+        # Esta fase puede fallar sin afectar los mensajes guardados
+        if messages_saved:
+            logger.info(f"Sending push notifications to {len(messages_saved)} employees")
+
+            for dni in messages_saved:
+                try:
+                    # Conexión individual para cada verificación de token
+                    push_conn = get_connection()
+                    push_cursor = push_conn.cursor()
+
+                    try:
+                        # Verificar si el empleado tiene token
+                        push_cursor.execute("SELECT token FROM tokens WHERE dni = %s", (dni,))
+                        result = push_cursor.fetchone()
+
+                        if result and result[0]:
+                            token = result[0]
+                            logger.info(f"Found token for DNI {dni}, sending push notification")
+                            try:
+                                enviar_push(token, "📢 Nuevo aviso", mensaje)
+                                push_sent_count += 1
+                                logger.info(f"Push notification sent successfully to DNI: {dni}")
+                            except Exception as push_error:
+                                logger.error(f"Failed to send push notification to DNI {dni}: {push_error}")
+                                push_failed_count += 1
+                        else:
+                            logger.warning(f"No token found for DNI: {dni}")
+
+                    finally:
+                        push_cursor.close()
+                        push_conn.close()
+
+                except Exception as e:
+                    logger.error(f"Error checking token for DNI {dni}: {e}")
+                    push_failed_count += 1
+
+        logger.info(f"Phase 1 - Messages: {sent_count} saved, {failed_count} failed")
+        logger.info(f"Phase 2 - Push notifications: {push_sent_count} sent, {push_failed_count} failed")
+
+        # Preparar mensaje de respuesta con diagnóstico experto
+        if failed_count == 0:
+            if push_failed_count == 0:
+                response_message = f"✅ Mensaje enviado correctamente a {sent_count} empleado{'s' if sent_count != 1 else ''}"
+                return jsonify({"success": True, "message": response_message})
+            else:
+                response_message = f"⚠️ Mensajes guardados para {sent_count} empleado{'s' if sent_count != 1 else ''}, pero {push_failed_count} notificación{'es' if push_failed_count != 1 else ''} push fallaron"
+                return jsonify({"success": True, "message": response_message, "warning": True})
+        else:
+            # Respuesta detallada para casos con fallos
+            response_message = f"⚠️ {sent_count} mensaje{'s' if sent_count != 1 else ''} guardado{'s' if sent_count != 1 else ''}, {failed_count} fallido{'s' if failed_count != 1 else ''}"
+
+            if push_sent_count > 0:
+                response_message += f". Push: {push_sent_count} enviado{'s' if push_sent_count != 1 else ''}"
+
+            if problematic_dnis:
+                response_message += f". DNIs con locks persistentes: {', '.join(problematic_dnis)}"
+                logger.warning(f"🚨 DNIs que requieren atención manual: {problematic_dnis}")
+
+                # Agregar recomendaciones específicas
+                recommendations = []
+                if len(problematic_dnis) > 0:
+                    recommendations.append("Revisar conexiones abiertas en phpMyAdmin")
+                    recommendations.append("Ejecutar: SHOW PROCESSLIST; y KILL [thread_id];")
+                    recommendations.append("Verificar transacciones no confirmadas")
+
+                return jsonify({
+                    "success": True,
+                    "message": response_message,
+                    "warning": True,
+                    "problematic_dnis": problematic_dnis,
+                    "recommendations": recommendations
+                })
+
+            return jsonify({"success": True, "message": response_message, "warning": True})
+
+    # Obtener estadísticas de mensajes enviados hoy
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT dni, mensaje, fecha FROM avisos ORDER BY fecha DESC LIMIT 10")
+
+    # Estadísticas generales de hoy
+    cursor.execute("""
+        SELECT COUNT(*) as total_hoy,
+               COUNT(DISTINCT DATE(fecha)) as dias_con_mensajes
+        FROM avisos
+        WHERE DATE(fecha) = CURDATE()
+    """)
+    stats_hoy = cursor.fetchone()
+
+    # Mensajes por sector hoy
+    cursor.execute("""
+        SELECT c.sector, COUNT(a.id) as cantidad
+        FROM avisos a
+        JOIN choferes c ON a.dni = c.dni
+        WHERE DATE(a.fecha) = CURDATE()
+        GROUP BY c.sector
+        ORDER BY cantidad DESC
+    """)
+    mensajes_por_sector = cursor.fetchall()
+
+    # Mensajes por sucursal hoy
+    cursor.execute("""
+        SELECT COALESCE(s.nombre, 'Sin sucursal') as sucursal, COUNT(a.id) as cantidad
+        FROM avisos a
+        LEFT JOIN choferes c ON a.dni = c.dni
+        LEFT JOIN sucursales s ON c.sucursal_id = s.id
+        WHERE DATE(a.fecha) = CURDATE()
+        GROUP BY s.nombre
+        ORDER BY cantidad DESC
+    """)
+    mensajes_por_sucursal = cursor.fetchall()
+
+    # Comparación con días anteriores
+    cursor.execute("""
+        SELECT
+            COUNT(CASE WHEN DATE(fecha) = CURDATE() THEN 1 END) as hoy,
+            COUNT(CASE WHEN DATE(fecha) = DATE_SUB(CURDATE(), INTERVAL 1 DAY) THEN 1 END) as ayer,
+            COUNT(CASE WHEN DATE(fecha) = DATE_SUB(CURDATE(), INTERVAL 7 DAY) THEN 1 END) as semana_pasada
+        FROM avisos
+        WHERE DATE(fecha) >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
+    """)
+    comparacion = cursor.fetchone()
+
+    # Obtener últimos 10 avisos con información del empleado
+    cursor.execute("""
+        SELECT a.dni, a.mensaje, a.fecha, c.nombre, c.sector,
+               COALESCE(s.nombre, 'Sin sucursal') as sucursal
+        FROM avisos a
+        LEFT JOIN choferes c ON a.dni = c.dni
+        LEFT JOIN sucursales s ON c.sucursal_id = s.id
+        ORDER BY a.fecha DESC LIMIT 10
+    """)
     avisos = cursor.fetchall()
+
+    # Obtener lista de empleados para el selector
+    empleados_cursor = conn.cursor(dictionary=True)
+    empleados_cursor.execute("""
+        SELECT c.dni, c.nombre, c.sector, s.nombre AS sucursal
+        FROM choferes c
+        LEFT JOIN sucursales s ON c.sucursal_id = s.id
+        ORDER BY c.nombre
+    """)
+    empleados = empleados_cursor.fetchall()
+    empleados_cursor.close()
+
     cursor.close()
     conn.close()
 
-    return render_template('panel.html', avisos=avisos)
+    # Preparar datos para el template
+    estadisticas_hoy = {
+        'total': stats_hoy[0] if stats_hoy else 0,
+        'dias_con_mensajes': stats_hoy[1] if stats_hoy else 0,
+        'por_sector': dict(mensajes_por_sector) if mensajes_por_sector else {},
+        'por_sucursal': dict(mensajes_por_sucursal) if mensajes_por_sucursal else {},
+        'comparacion': {
+            'hoy': comparacion[0] if comparacion else 0,
+            'ayer': comparacion[1] if comparacion else 0,
+            'semana_pasada': comparacion[2] if comparacion else 0
+        }
+    }
+
+    return render_template('panel.html', avisos=avisos, empleados=empleados, estadisticas_hoy=estadisticas_hoy)
 
 @app.route('/avisos_push')
 @login_required
@@ -412,68 +947,209 @@ def nuevo_chofer():
 @app.route('/admin/choferes/editar/<dni>', methods=['GET', 'POST'])
 @login_required
 def editar_chofer(dni):
-    conn = get_connection()
-    cursor = conn.cursor(dictionary=True)
-
-    # Obtener sucursales para dropdown
-    cursor.execute("SELECT id, nombre FROM sucursales WHERE activa = TRUE")
-    sucursales = cursor.fetchall()
-
-    if request.method == 'POST':
-        nombre = request.form['nombre']
-        sector = request.form['sector']
-        sucursal_id = request.form['sucursal_id']
-        imagen = request.files['imagen']
-
-        if imagen and imagen.filename:
-            imagen_blob = redimensionar_imagen(imagen.read())
-            cursor.execute("""
-                UPDATE choferes
-                SET nombre = %s, sector = %s, sucursal_id = %s, imagen = %s
-                WHERE dni = %s
-            """, (nombre, sector, sucursal_id, imagen_blob, dni))
-        else:
-            cursor.execute("""
-                UPDATE choferes
-                SET nombre = %s, sector = %s, sucursal_id = %s
-                WHERE dni = %s
-            """, (nombre, sector, sucursal_id, dni))
-
-        conn.commit()
-        cursor.close()
-        conn.close()
-        flash("✅ Datos del Empleado actualizados", "success")
+    # Validar formato del DNI
+    if not re.match(r'^\d{7,8}$', dni):
+        flash("❌ DNI inválido", "danger")
         return redirect(url_for('listar_choferes'))
 
-    # Cargar datos actuales del chofer
-    cursor.execute("""
-        SELECT nombre, sector, sucursal_id
-        FROM choferes WHERE dni = %s
-    """, (dni,))
-    chofer = cursor.fetchone()
-    cursor.close()
-    conn.close()
+    conn = None
+    cursor = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
 
-    if not chofer:
-        flash("❌ Empleado no encontrado", "danger")
+        # Obtener sucursales para dropdown
+        cursor.execute("SELECT id, nombre FROM sucursales WHERE activa = TRUE")
+        sucursales = cursor.fetchall()
+
+        if request.method == 'POST':
+            nombre = request.form.get('nombre', '').strip()
+            sector = request.form.get('sector', '').strip()
+            sucursal_id = request.form.get('sucursal_id', '').strip()
+            imagen = request.files.get('imagen')
+
+            # Validaciones básicas
+            if not nombre or not sector or not sucursal_id:
+                flash("❌ Todos los campos obligatorios deben completarse", "danger")
+                return redirect(request.url)
+
+            if len(nombre) < 2:
+                flash("❌ El nombre debe tener al menos 2 caracteres", "danger")
+                return redirect(request.url)
+
+            # Verificar que la sucursal existe
+            cursor.execute("SELECT id FROM sucursales WHERE id = %s AND activa = TRUE", (sucursal_id,))
+            if not cursor.fetchone():
+                flash("❌ Sucursal inválida", "danger")
+                return redirect(request.url)
+
+            # Procesar imagen si existe
+            imagen_blob = None
+            if imagen and imagen.filename:
+                try:
+                    imagen_blob = redimensionar_imagen(imagen.read())
+                except Exception as img_err:
+                    logger.error(f"Error processing image for employee {dni}: {img_err}")
+                    flash("❌ Error al procesar la imagen", "danger")
+                    return redirect(request.url)
+
+            # Actualizar empleado
+            if imagen_blob:
+                cursor.execute("""
+                    UPDATE choferes
+                    SET nombre = %s, sector = %s, sucursal_id = %s, imagen = %s
+                    WHERE dni = %s
+                """, (nombre, sector, sucursal_id, imagen_blob, dni))
+            else:
+                cursor.execute("""
+                    UPDATE choferes
+                    SET nombre = %s, sector = %s, sucursal_id = %s
+                    WHERE dni = %s
+                """, (nombre, sector, sucursal_id, dni))
+
+            conn.commit()
+            flash("✅ Datos del Empleado actualizados correctamente", "success")
+            return redirect(url_for('listar_choferes'))
+
+        # GET: Cargar datos actuales del chofer
+        cursor.execute("""
+            SELECT nombre, sector, sucursal_id
+            FROM choferes WHERE dni = %s
+        """, (dni,))
+        chofer = cursor.fetchone()
+
+        if not chofer:
+            flash("❌ Empleado no encontrado", "danger")
+            return redirect(url_for('listar_choferes'))
+
+        return render_template('editar_chofer.html', dni=dni, nombre=chofer['nombre'],
+                               sector=chofer['sector'], sucursal_id=chofer['sucursal_id'],
+                               sucursales=sucursales)
+
+    except mysql.connector.errors.DatabaseError as db_err:
+        if conn:
+            conn.rollback()
+        logger.error(f"Database error editing employee {dni}: {db_err}")
+        flash(f"❌ Error de base de datos: {str(db_err)}", "danger")
         return redirect(url_for('listar_choferes'))
 
-    return render_template('editar_chofer.html', dni=dni, nombre=chofer['nombre'],
-                           sector=chofer['sector'], sucursal_id=chofer['sucursal_id'],
-                           sucursales=sucursales)
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        logger.error(f"Unexpected error editing employee {dni}: {e}")
+        flash(f"❌ Error inesperado: {str(e)}", "danger")
+        return redirect(url_for('listar_choferes'))
+
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
     
     
 @app.route('/admin/choferes/eliminar/<dni>', methods=['POST'])
 @login_required
 def eliminar_chofer(dni):
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("DELETE FROM choferes WHERE dni = %s", (dni,))
-    conn.commit()
-    cursor.close()
-    conn.close()
-    flash("🗑️ Empleado eliminado", "warning")
-    return redirect(url_for('listar_choferes'))
+    # Validar formato del DNI
+    if not re.match(r'^\d{7,8}$', dni):
+        flash("❌ DNI inválido", "danger")
+        return redirect(url_for('listar_choferes'))
+
+    conn = None
+    cursor = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+
+        # Verificar que el empleado existe antes de eliminar
+        cursor.execute("SELECT nombre FROM choferes WHERE dni = %s", (dni,))
+        empleado = cursor.fetchone()
+
+        if not empleado:
+            flash("❌ Empleado no encontrado", "danger")
+            return redirect(url_for('listar_choferes'))
+
+        # Intentar múltiples estrategias para manejar locks
+        try:
+            # Estrategia 1: Timeout más largo
+            cursor.execute("SET SESSION innodb_lock_wait_timeout = 30")
+            cursor.execute("DELETE FROM choferes WHERE dni = %s", (dni,))
+            conn.commit()
+            flash(f"🗑️ Empleado '{empleado[0]}' eliminado correctamente", "success")
+            return redirect(url_for('listar_choferes'))
+
+        except mysql.connector.errors.DatabaseError as lock_err:
+            if "Lock wait timeout" in str(lock_err):
+                logger.warning(f"Lock timeout for employee {dni}, trying alternative approach")
+
+                # Estrategia 2: Forzar rollback y reintentar
+                try:
+                    conn.rollback()
+                    # Esperar un momento y reintentar
+                    import time
+                    time.sleep(1)
+
+                    cursor.execute("SET SESSION innodb_lock_wait_timeout = 10")
+                    cursor.execute("DELETE FROM choferes WHERE dni = %s", (dni,))
+                    conn.commit()
+                    flash(f"🗑️ Empleado '{empleado[0]}' eliminado correctamente", "success")
+                    return redirect(url_for('listar_choferes'))
+
+                except mysql.connector.errors.DatabaseError:
+                    # Estrategia 3: Usar SELECT FOR UPDATE para verificar locks
+                    try:
+                        cursor.execute("SELECT * FROM choferes WHERE dni = %s FOR UPDATE NOWAIT", (dni,))
+                        cursor.execute("DELETE FROM choferes WHERE dni = %s", (dni,))
+                        conn.commit()
+                        flash(f"🗑️ Empleado '{empleado[0]}' eliminado correctamente", "success")
+                        return redirect(url_for('listar_choferes'))
+
+                    except mysql.connector.errors.DatabaseError:
+                        # Si todo falla, informar al usuario
+                        flash("⚠️ No se pudo eliminar el empleado debido a bloqueos en la base de datos. "
+                              "Por favor, contacte al administrador del sistema.", "danger")
+                        return redirect(url_for('listar_choferes'))
+            else:
+                raise lock_err
+
+    except mysql.connector.errors.DatabaseError as db_err:
+        if conn:
+            try:
+                conn.rollback()
+            except:
+                pass
+        logger.error(f"Database error deleting employee {dni}: {db_err}")
+
+        if "Lock wait timeout" in str(db_err):
+            flash("⚠️ La base de datos está ocupada. Intente nuevamente en unos segundos.", "warning")
+        elif "Deadlock found" in str(db_err):
+            flash("⚠️ Conflicto de concurrencia. Intente nuevamente.", "warning")
+        else:
+            flash(f"❌ Error de base de datos al eliminar empleado: {str(db_err)}", "danger")
+
+        return redirect(url_for('listar_choferes'))
+
+    except Exception as e:
+        if conn:
+            try:
+                conn.rollback()
+            except:
+                pass
+        logger.error(f"Unexpected error deleting employee {dni}: {e}")
+        flash(f"❌ Error inesperado al eliminar empleado: {str(e)}", "danger")
+        return redirect(url_for('listar_choferes'))
+
+    finally:
+        if cursor:
+            try:
+                cursor.close()
+            except:
+                pass
+        if conn:
+            try:
+                conn.close()
+            except:
+                pass
 
 @app.route('/chofer/imagen/<dni>')
 def imagen_chofer(dni):
@@ -809,6 +1485,57 @@ def testdb():
         return f"✅ Conectado a la base de datos: {db_name}"
     except Exception as e:
         return f"❌ Error de conexión: {e}"
+
+@app.route('/admin/db-status')
+@login_required
+def db_status():
+    """Página de diagnóstico del estado de la base de datos."""
+    locks = check_database_locks()
+
+    conn = None
+    cursor = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        # Información general de la base de datos
+        cursor.execute("SELECT DATABASE() as db_name, USER() as user, VERSION() as version")
+        db_info = cursor.fetchone()
+
+        # Contar registros en tablas principales
+        cursor.execute("SELECT COUNT(*) as choferes FROM choferes")
+        choferes_count = cursor.fetchone()['choferes']
+
+        cursor.execute("SELECT COUNT(*) as reuniones FROM reuniones")
+        reuniones_count = cursor.fetchone()['reuniones']
+
+        cursor.execute("SELECT COUNT(*) as kpis FROM kpis")
+        kpis_count = cursor.fetchone()['kpis']
+
+        # Verificar conexiones activas
+        cursor.execute("""
+            SELECT COUNT(*) as active_connections
+            FROM information_schema.processlist
+            WHERE command != 'Sleep' OR time > 60
+        """)
+        active_connections = cursor.fetchone()['active_connections']
+
+        return render_template('db_status.html',
+                             db_info=db_info,
+                             locks=locks,
+                             choferes_count=choferes_count,
+                             reuniones_count=reuniones_count,
+                             kpis_count=kpis_count,
+                             active_connections=active_connections)
+
+    except Exception as e:
+        logger.error(f"Error getting database status: {e}")
+        return f"❌ Error obteniendo estado de la base de datos: {e}"
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
     
     # ─────────────────────── utilidades ────────────────────────
 def cargar_sectores(cursor):

@@ -1,44 +1,860 @@
 {% extends "base.html" %}
 
 {% block title %}Editar Empleado{% endblock %}
-{% block header %}✏️ Editar Empleado{% endblock %}
+
+{% block header %}Editar Empleado{% endblock %}
 
 {% block content %}
-<div class="container mt-4">
-    <form method="POST" enctype="multipart/form-data">
-        <div class="mb-3">
-            <label class="form-label">DNI</label>
-            <input type="text" class="form-control" value="{{ dni }}" readonly>
+<div class="fade-in-up">
+  <!-- Header Section -->
+  <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 mb-4">
+    <div>
+      <h1 class="h4 mb-1 d-flex align-items-center gap-2">
+        <i class="bi bi-pencil-square text-primary"></i>
+        Editar Empleado
+      </h1>
+      <p class="text-muted mb-0">Modifica la información del empleado</p>
+    </div>
+
+    <div class="d-flex gap-2">
+      <a href="{{ url_for('listar_choferes') }}" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left me-1"></i>
+        <span class="d-none d-sm-inline">Volver a </span>Empleados
+      </a>
+    </div>
+  </div>
+
+  <!-- Employee Info Card -->
+  <div class="row g-4">
+    <div class="col-lg-4">
+      <div class="card shadow-sm">
+        <div class="card-body text-center">
+          <div class="avatar-preview mb-3">
+            <div class="avatar-wrapper position-relative mx-auto">
+              <img src="{{ url_for('imagen_chofer', dni=dni) }}"
+                   alt="Foto actual de {{ nombre }}"
+                   class="avatar-img rounded-circle"
+                   id="currentAvatar"
+                   onerror="this.onerror=null;this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTIwIiBoZWlnaHQ9IjEyMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTIwIiBoZWlnaHQ9IjEyMCIgZmlsbD0iI2YxZjVmOSIgcng9IjYwIi8+PHRleHQgeD0iNjAiIHk9IjY1IiBmb250LXNpemU9IjQwIiBmaWxsPSIjOWNhM2FmIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5VUzwvdGV4dD48L3N2Zz4=';">
+                <div class="avatar-placeholder">
+                  {{ nombre[0].upper() }}
+                </div>
+              </img>
+            </div>
+          </div>
+
+          <h5 class="card-title mb-1">{{ nombre }}</h5>
+          <p class="text-muted mb-2">DNI: {{ dni }}</p>
+
+          <div class="sector-badge mb-3">
+            {% if sector == 'entrega' %}
+              <span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25">
+                <i class="bi bi-truck me-1"></i>Entrega
+              </span>
+            {% elif sector == 'almacén' %}
+              <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25">
+                <i class="bi bi-box-seam me-1"></i>Almacén
+              </span>
+            {% elif sector == 'administración' %}
+              <span class="badge bg-warning bg-opacity-10 text-warning border border-warning border-opacity-25">
+                <i class="bi bi-clipboard-data me-1"></i>Administración
+              </span>
+            {% elif sector == 'mantenimiento' %}
+              <span class="badge bg-secondary bg-opacity-10 text-secondary border border-secondary border-opacity-25">
+                <i class="bi bi-tools me-1"></i>Mantenimiento
+              </span>
+            {% else %}
+              <span class="badge bg-light text-dark border">
+                <i class="bi bi-person me-1"></i>{{ sector | capitalize }}
+              </span>
+            {% endif %}
+          </div>
+
+          <div class="text-muted small">
+            <i class="bi bi-geo-alt me-1"></i>
+            {% for s in sucursales %}
+              {% if s.id == sucursal_id %}{{ s.nombre }}{% endif %}
+            {% endfor %}
+          </div>
         </div>
-        <div class="mb-3">
-            <label class="form-label">Nombre</label>
-            <input type="text" name="nombre" class="form-control" value="{{ nombre }}" required>
+      </div>
+    </div>
+
+    <div class="col-lg-8">
+      <div class="card shadow-sm">
+        <div class="card-header bg-light">
+          <h5 class="card-title mb-0 d-flex align-items-center">
+            <i class="bi bi-person-gear me-2 text-primary"></i>
+            Información del Empleado
+          </h5>
         </div>
-        <div class="mb-3">
-            <label class="form-label">Sector</label>
-            <select name="sector" class="form-select" required>
-                <option value="entrega" {% if sector == 'entrega' %}selected{% endif %}>Entrega</option>
-                <option value="almacén" {% if sector == 'almacén' %}selected{% endif %}>Almacén</option>
-                <option value="administración" {% if sector == 'administración' %}selected{% endif %}>Administración</option>
-                <option value="mantenimiento" {% if sector == 'mantenimiento' %}selected{% endif %}>Mantenimiento</option>
-            </select>
+
+        <div class="card-body">
+          <form method="POST" enctype="multipart/form-data" id="editEmployeeForm" novalidate>
+            <!-- DNI (Read-only) -->
+            <div class="row g-3">
+              <div class="col-md-6">
+                <div class="form-group">
+                  <label for="dni" class="form-label fw-semibold">
+                    <i class="bi bi-person-badge me-1"></i>
+                    DNI
+                  </label>
+                  <div class="input-group">
+                    <span class="input-group-text bg-light dni-input-group">
+                      <i class="bi bi-lock text-muted"></i>
+                    </span>
+                    <input type="text" id="dni" class="form-control bg-light dni-readonly" value="{{ dni }}" readonly tabindex="-1">
+                  </div>
+                  <div class="form-text text-muted">El DNI no puede modificarse</div>
+                </div>
+              </div>
+
+              <!-- Nombre -->
+              <div class="col-md-6">
+                <div class="form-group">
+                  <label for="nombre" class="form-label fw-semibold">
+                    <i class="bi bi-person me-1"></i>
+                    Nombre Completo <span class="text-danger">*</span>
+                  </label>
+                  <div class="input-group">
+                    <span class="input-group-text bg-light">
+                      <i class="bi bi-person-fill text-muted"></i>
+                    </span>
+                    <input type="text" id="nombre" name="nombre" class="form-control"
+                           value="{{ nombre }}" required maxlength="100"
+                           placeholder="Ingresa el nombre completo">
+                    <div class="invalid-feedback">
+                      Por favor ingresa un nombre válido.
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Sector -->
+              <div class="col-md-6">
+                <div class="form-group">
+                  <label for="sector" class="form-label fw-semibold">
+                    <i class="bi bi-briefcase me-1"></i>
+                    Sector <span class="text-danger">*</span>
+                  </label>
+                  <div class="input-group">
+                    <span class="input-group-text bg-light">
+                      <i class="bi bi-diagram-3 text-muted"></i>
+                    </span>
+                    <select id="sector" name="sector" class="form-select" required>
+                      <option value="">-- Seleccionar sector --</option>
+                      <option value="entrega" {% if sector == 'entrega' %}selected{% endif %}>
+                        🚚 Entrega
+                      </option>
+                      <option value="almacén" {% if sector == 'almacén' %}selected{% endif %}>
+                        📦 Almacén
+                      </option>
+                      <option value="administración" {% if sector == 'administración' %}selected{% endif %}>
+                        🧾 Administración
+                      </option>
+                      <option value="mantenimiento" {% if sector == 'mantenimiento' %}selected{% endif %}>
+                        🛠️ Mantenimiento
+                      </option>
+                    </select>
+                    <div class="invalid-feedback">
+                      Por favor selecciona un sector.
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Sucursal -->
+              <div class="col-md-6">
+                <div class="form-group">
+                  <label for="sucursal_id" class="form-label fw-semibold">
+                    <i class="bi bi-geo-alt me-1"></i>
+                    Sucursal <span class="text-danger">*</span>
+                  </label>
+                  <div class="input-group">
+                    <span class="input-group-text bg-light">
+                      <i class="bi bi-building text-muted"></i>
+                    </span>
+                    <select id="sucursal_id" name="sucursal_id" class="form-select" required>
+                      <option value="">-- Seleccionar sucursal --</option>
+                      {% for s in sucursales %}
+                        <option value="{{ s.id }}" {% if s.id == sucursal_id %}selected{% endif %}>
+                          {{ s.nombre }}
+                        </option>
+                      {% endfor %}
+                    </select>
+                    <div class="invalid-feedback">
+                      Por favor selecciona una sucursal.
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Foto -->
+              <div class="col-12">
+                <div class="form-group">
+                  <label for="imagen" class="form-label fw-semibold">
+                    <i class="bi bi-camera me-1"></i>
+                    Actualizar Foto
+                  </label>
+                  <div class="file-upload-area border border-2 border-dashed rounded-3 p-4 text-center"
+                       onclick="document.getElementById('imagen').click()">
+                    <div class="upload-icon mb-2">
+                      <i class="bi bi-cloud-upload text-primary fs-1"></i>
+                    </div>
+                    <div class="upload-text">
+                      <p class="mb-1 fw-semibold">Haz clic para seleccionar una imagen</p>
+                      <p class="text-muted small mb-0">PNG, JPG o JPEG (máx. 5MB)</p>
+                    </div>
+                    <input type="file" id="imagen" name="imagen" class="d-none" accept="image/*"
+                           onchange="handleFileSelect(this)">
+                  </div>
+
+                  <div id="filePreview" class="mt-3 d-none">
+                    <div class="card bg-light">
+                      <div class="card-body">
+                        <div class="d-flex align-items-center">
+                          <div class="file-icon me-3">
+                            <i class="bi bi-file-earmark-image text-success fs-4"></i>
+                          </div>
+                          <div class="flex-grow-1">
+                            <div class="fw-semibold" id="fileName"></div>
+                            <small class="text-muted" id="fileSize"></small>
+                          </div>
+                          <button type="button" class="btn btn-sm btn-outline-danger"
+                                  onclick="clearFileSelection()">
+                            <i class="bi bi-x-lg"></i>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="form-text text-muted">
+                    <i class="bi bi-info-circle me-1"></i>
+                    Si no seleccionas una nueva imagen, se mantendrá la actual.
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Form Actions -->
+            <div class="d-flex flex-column flex-sm-row gap-2 mt-4 pt-3 border-top">
+              <button type="submit" class="btn btn-primary flex-fill" id="submitBtn">
+                <i class="bi bi-check-circle me-1"></i>
+                <span id="submitText">Guardar Cambios</span>
+              </button>
+
+              <button type="button" class="btn btn-outline-secondary" onclick="resetForm()">
+                <i class="bi bi-arrow-counterclockwise me-1"></i>
+                Restablecer
+              </button>
+
+              <a href="{{ url_for('listar_choferes') }}" class="btn btn-outline-danger">
+                <i class="bi bi-x-circle me-1"></i>
+                Cancelar
+              </a>
+            </div>
+          </form>
         </div>
-        <div class="mb-3">
-            <label class="form-label">Sucursal</label>
-            <select name="sucursal_id" class="form-select" required>
-                <option value="">-- Seleccionar sucursal --</option>
-                {% for s in sucursales %}
-                    <option value="{{ s.id }}" {% if s.id == sucursal_id %}selected{% endif %}>{{ s.nombre }}</option>
-                {% endfor %}
-            </select>
-        </div>
-        <div class="mb-3">
-            <label class="form-label">Actualizar Foto</label>
-            <input type="file" name="imagen" class="form-control" accept="image/*">
-        </div>
-        <button type="submit" class="btn btn-primary">Guardar Cambios</button>
-    </form>
+      </div>
+    </div>
+  </div>
 </div>
+
+<style>
+/* ===== CSS Variables for Dark Mode ===== */
+:root {
+  --primary-color: #6366f1;
+  --primary-dark: #4f46e5;
+  --secondary-color: #64748b;
+  --accent-color: #06b6d4;
+  --success-color: #10b981;
+  --warning-color: #f59e0b;
+  --danger-color: #ef4444;
+
+  /* Light Theme */
+  --bg-primary: #f8fafc;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #f1f5f9;
+  --text-primary: #1e293b;
+  --text-secondary: #64748b;
+  --text-muted: #94a3b8;
+  --border-color: #e2e8f0;
+  --border-light: #f1f5f9;
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+
+  /* Transitions */
+  --transition-fast: 0.15s ease;
+  --transition-normal: 0.3s ease;
+  --transition-slow: 0.5s ease;
+}
+
+/* Dark Theme */
+[data-theme="dark"] {
+  --bg-primary: #0f172a;
+  --bg-secondary: #1e293b;
+  --bg-tertiary: #334155;
+  --text-primary: #f8fafc;
+  --text-secondary: #cbd5e1;
+  --text-muted: #94a3b8;
+  --border-color: #334155;
+  --border-light: #475569;
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+}
+
+/* ===== Avatar Styles ===== */
+.avatar-wrapper {
+  position: relative;
+  width: 120px;
+  height: 120px;
+}
+
+.avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border: 4px solid var(--border-color);
+  transition: all var(--transition-fast);
+}
+
+.avatar-placeholder {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-weight: 600;
+  font-size: 2rem;
+  color: var(--text-muted);
+}
+
+.avatar-wrapper:hover .avatar-img {
+  border-color: var(--primary-color);
+  transform: scale(1.05);
+}
+
+/* ===== Sector Badges ===== */
+.sector-badge .badge {
+  font-size: 0.875rem;
+  padding: 0.5rem 1rem;
+}
+
+/* ===== File Upload Area ===== */
+.file-upload-area {
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  background: var(--bg-secondary);
+  border-color: var(--border-color) !important;
+}
+
+.file-upload-area:hover {
+  background: var(--bg-tertiary);
+  border-color: var(--primary-color) !important;
+}
+
+.upload-icon {
+  transition: transform var(--transition-fast);
+}
+
+.file-upload-area:hover .upload-icon {
+  transform: scale(1.1);
+}
+
+/* ===== Form Styles ===== */
+.form-group {
+  margin-bottom: 1.5rem;
+}
+
+.input-group-text {
+  border-right: none;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+}
+
+.form-control, .form-select {
+  border-left: none;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border-color: var(--border-color);
+}
+
+.form-control:focus, .form-select:focus {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 0.2rem rgba(99, 102, 241, 0.25);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.form-control::placeholder {
+  color: var(--text-muted);
+}
+
+.form-label {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.form-text {
+  color: var(--text-muted);
+}
+
+/* ===== Card Styles ===== */
+.card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  transition: all var(--transition-fast);
+}
+
+.card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg) !important;
+}
+
+.card-header {
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border-color);
+  color: var(--text-primary);
+}
+
+/* ===== Button Styles ===== */
+.btn {
+  transition: all var(--transition-fast);
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
+  border: none;
+}
+
+.btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+.btn-outline-secondary {
+  border-color: var(--border-color);
+  color: var(--text-primary);
+}
+
+.btn-outline-secondary:hover {
+  background: var(--bg-tertiary);
+  border-color: var(--text-secondary);
+  color: var(--text-primary);
+}
+
+.btn-outline-danger {
+  border-color: var(--danger-color);
+  color: var(--danger-color);
+}
+
+.btn-outline-danger:hover {
+  background: var(--danger-color);
+  border-color: var(--danger-color);
+  color: white;
+}
+
+/* ===== Loading States ===== */
+.btn:disabled {
+  opacity: 0.7;
+}
+
+#submitBtn.loading {
+  position: relative;
+  color: transparent !important;
+}
+
+#submitBtn.loading::after {
+  content: "";
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  top: 50%;
+  left: 50%;
+  margin-left: -8px;
+  margin-top: -8px;
+  border: 2px solid #ffffff;
+  border-radius: 50%;
+  border-top-color: transparent;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ===== File Preview ===== */
+#filePreview {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 0.5rem;
+}
+
+#filePreview .text-muted {
+  color: var(--text-muted) !important;
+}
+
+/* ===== Responsive Adjustments ===== */
+@media (max-width: 768px) {
+  .avatar-wrapper {
+    width: 100px;
+    height: 100px;
+  }
+
+  .sector-badge {
+    margin-bottom: 1.5rem !important;
+  }
+
+  .file-upload-area {
+    padding: 2rem 1rem;
+  }
+
+  .upload-text p {
+    font-size: 0.875rem;
+  }
+}
+
+@media (max-width: 576px) {
+  .btn-group-vertical .btn {
+    margin-bottom: 0.5rem;
+  }
+
+  .d-flex.flex-column.flex-sm-row {
+    flex-direction: column !important;
+  }
+
+  .btn {
+    width: 100%;
+  }
+}
+
+/* ===== Fade in animation ===== */
+.fade-in-up {
+  animation: fadeInUp 0.6s ease-out;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ===== Dark Mode Specific Overrides ===== */
+[data-theme="dark"] .file-upload-area {
+  background: var(--bg-secondary);
+}
+
+[data-theme="dark"] .input-group-text {
+  background: var(--bg-tertiary);
+  border-color: var(--border-color);
+}
+
+[data-theme="dark"] .form-control,
+[data-theme="dark"] .form-select {
+  background: var(--bg-secondary);
+  border-color: var(--border-color);
+  color: var(--text-primary);
+}
+
+[data-theme="dark"] .form-control:focus,
+[data-theme="dark"] .form-select:focus {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+[data-theme="dark"] #filePreview {
+  background: var(--bg-tertiary);
+  border-color: var(--border-color);
+}
+
+/* ===== DNI Readonly Field Specific Styles ===== */
+.dni-readonly {
+  background: var(--bg-tertiary) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border-color) !important;
+  font-weight: 600;
+  cursor: not-allowed;
+}
+
+.dni-input-group {
+  background: var(--bg-tertiary) !important;
+  border-color: var(--border-color) !important;
+  color: var(--text-secondary) !important;
+}
+
+/* Dark mode specific for DNI field */
+[data-theme="dark"] .dni-readonly {
+  background: var(--bg-tertiary) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border-color) !important;
+}
+
+[data-theme="dark"] .dni-input-group {
+  background: var(--bg-tertiary) !important;
+  border-color: var(--border-color) !important;
+  color: var(--text-secondary) !important;
+}
+
+/* Ensure DNI field is always readable */
+.dni-readonly::placeholder {
+  color: var(--text-muted) !important;
+}
+
+[data-theme="dark"] .dni-readonly::placeholder {
+  color: var(--text-muted) !important;
+}
+</style>
+
 {% endblock %}
 
+{% block scripts %}
+<script>
+class EmployeeEditManager {
+  constructor() {
+    this.form = document.getElementById('editEmployeeForm');
+    this.submitBtn = document.getElementById('submitBtn');
+    this.submitText = document.getElementById('submitText');
+    this.fileInput = document.getElementById('imagen');
+    this.filePreview = document.getElementById('filePreview');
+    this.fileName = document.getElementById('fileName');
+    this.fileSize = document.getElementById('fileSize');
 
+    this.init();
+  }
+
+  init() {
+    this.setupFormValidation();
+    this.setupFileHandling();
+    this.setupFormSubmission();
+  }
+
+  setupFormValidation() {
+    // Bootstrap form validation
+    this.form.addEventListener('submit', (e) => {
+      if (!this.form.checkValidity()) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+      this.form.classList.add('was-validated');
+    });
+
+    // Real-time validation
+    const inputs = this.form.querySelectorAll('input, select');
+    inputs.forEach(input => {
+      input.addEventListener('blur', () => {
+        this.validateField(input);
+      });
+
+      input.addEventListener('input', () => {
+        if (input.classList.contains('is-invalid')) {
+          this.validateField(input);
+        }
+      });
+    });
+  }
+
+  validateField(field) {
+    const value = field.value.trim();
+    let isValid = true;
+    let message = '';
+
+    switch (field.name) {
+      case 'nombre':
+        if (!value) {
+          isValid = false;
+          message = 'El nombre es obligatorio.';
+        } else if (value.length < 2) {
+          isValid = false;
+          message = 'El nombre debe tener al menos 2 caracteres.';
+        } else if (!/^[a-zA-ZÀ-ÿ\s]+$/.test(value)) {
+          isValid = false;
+          message = 'El nombre solo puede contener letras y espacios.';
+        }
+        break;
+
+      case 'sector':
+        if (!value) {
+          isValid = false;
+          message = 'Debes seleccionar un sector.';
+        }
+        break;
+
+      case 'sucursal_id':
+        if (!value) {
+          isValid = false;
+          message = 'Debes seleccionar una sucursal.';
+        }
+        break;
+    }
+
+    field.classList.toggle('is-invalid', !isValid);
+    field.classList.toggle('is-valid', isValid && value);
+
+    const feedback = field.parentElement.querySelector('.invalid-feedback');
+    if (feedback) {
+      feedback.textContent = message;
+    }
+
+    return isValid;
+  }
+
+  setupFileHandling() {
+    // File size validation (5MB max)
+    this.fileInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        const maxSize = 5 * 1024 * 1024; // 5MB
+        if (file.size > maxSize) {
+          this.showToast('El archivo es demasiado grande. Máximo 5MB.', 'danger');
+          this.clearFileSelection();
+          return;
+        }
+
+        // Validate file type
+        const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png'];
+        if (!allowedTypes.includes(file.type)) {
+          this.showToast('Solo se permiten archivos JPG, JPEG o PNG.', 'danger');
+          this.clearFileSelection();
+          return;
+        }
+
+        this.showFilePreview(file);
+      }
+    });
+  }
+
+  showFilePreview(file) {
+    this.fileName.textContent = file.name;
+    this.fileSize.textContent = this.formatFileSize(file.size);
+    this.filePreview.classList.remove('d-none');
+
+    // Update upload area text
+    const uploadArea = document.querySelector('.file-upload-area');
+    uploadArea.querySelector('.upload-text').innerHTML = `
+      <p class="mb-1 fw-semibold text-success">Archivo seleccionado</p>
+      <p class="text-muted small mb-0">${file.name}</p>
+    `;
+  }
+
+  clearFileSelection() {
+    this.fileInput.value = '';
+    this.filePreview.classList.add('d-none');
+
+    // Reset upload area
+    const uploadArea = document.querySelector('.file-upload-area');
+    uploadArea.querySelector('.upload-text').innerHTML = `
+      <p class="mb-1 fw-semibold">Haz clic para seleccionar una imagen</p>
+      <p class="text-muted small mb-0">PNG, JPG o JPEG (máx. 5MB)</p>
+    `;
+  }
+
+  formatFileSize(bytes) {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  }
+
+  setupFormSubmission() {
+    this.form.addEventListener('submit', (e) => {
+      if (!this.form.checkValidity()) {
+        e.preventDefault();
+        this.showToast('Por favor corrige los errores del formulario.', 'warning');
+        return;
+      }
+
+      // Show loading state
+      this.setLoadingState(true);
+
+      // Let the form submit normally, but show loading
+      // The actual submission will be handled by the server
+    });
+  }
+
+  setLoadingState(loading) {
+    this.submitBtn.disabled = loading;
+    this.submitBtn.classList.toggle('loading', loading);
+
+    if (loading) {
+      this.submitText.textContent = 'Guardando...';
+    } else {
+      this.submitText.textContent = 'Guardar Cambios';
+    }
+  }
+
+  showToast(message, type = 'info') {
+    // Create toast element
+    const toast = document.createElement('div');
+    toast.className = `toast align-items-center text-white bg-${type} border-0`;
+    toast.setAttribute('role', 'alert');
+    toast.innerHTML = `
+      <div class="d-flex">
+        <div class="toast-body">${message}</div>
+        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+      </div>
+    `;
+
+    // Add to container
+    const container = document.querySelector('.toast-container') || this.createToastContainer();
+    container.appendChild(toast);
+
+    // Show toast
+    const bsToast = new bootstrap.Toast(toast);
+    bsToast.show();
+
+    // Remove after hide
+    toast.addEventListener('hidden.bs.toast', () => {
+      toast.remove();
+    });
+  }
+
+  createToastContainer() {
+    const container = document.createElement('div');
+    container.className = 'toast-container position-fixed top-0 end-0 p-3';
+    container.style.zIndex = '9999';
+    document.body.appendChild(container);
+    return container;
+  }
+}
+
+function handleFileSelect(input) {
+  // This function is called from the onclick attribute
+  // The actual handling is done by the event listener in the class
+}
+
+function clearFileSelection() {
+  // Global function for onclick attribute
+  const manager = window.employeeEditManager;
+  if (manager) {
+    manager.clearFileSelection();
+  }
+}
+
+function resetForm() {
+  const manager = window.employeeEditManager;
+  if (manager) {
+    manager.form.reset();
+    manager.form.classList.remove('was-validated');
+    manager.clearFileSelection();
+
+    // Clear validation states
+    manager.form.querySelectorAll('.is-valid, .is-invalid').forEach(el => {
+      el.classList.remove('is-valid', 'is-invalid');
+    });
+  }
+}
+
+// Initialize when DOM is ready
+document.addEventListener('DOMContentLoaded', () => {
+  window.employeeEditManager = new EmployeeEditManager();
+});
+</script>
+{% endblock %}
