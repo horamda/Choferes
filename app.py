@@ -811,7 +811,8 @@ def panel():
     comparacion = cursor.fetchone()
 
     # Obtener últimos 10 avisos con información del empleado
-    cursor.execute("""
+    avisos_cursor = conn.cursor(dictionary=True)
+    avisos_cursor.execute("""
         SELECT a.dni, a.mensaje, a.fecha, c.nombre, c.sector,
                COALESCE(s.nombre, 'Sin sucursal') as sucursal
         FROM avisos a
@@ -819,7 +820,8 @@ def panel():
         LEFT JOIN sucursales s ON c.sucursal_id = s.id
         ORDER BY a.fecha DESC LIMIT 10
     """)
-    avisos = cursor.fetchall()
+    avisos = avisos_cursor.fetchall()
+    avisos_cursor.close()
 
     # Obtener lista de empleados para el selector
     empleados_cursor = conn.cursor(dictionary=True)
