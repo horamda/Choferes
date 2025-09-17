@@ -198,6 +198,75 @@
   }
 }
 
+/* ===== Map Info Overlay ===== */
+.map-info-overlay {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  right: 10px;
+  z-index: 1000;
+  pointer-events: none;
+}
+
+.map-info-content {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 0.85rem;
+  color: #495057;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  animation: fadeInDown 0.3s ease-out;
+}
+
+@keyframes fadeInDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeOutUp {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+}
+
+/* ===== Map Status ===== */
+.map-status {
+  background: rgba(248, 249, 250, 0.8);
+  backdrop-filter: blur(5px);
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  border-radius: 6px;
+  padding: 8px 12px;
+}
+
+/* ===== Enhanced Map Controls ===== */
+.map-controls .btn {
+  transition: var(--transition-smooth);
+  position: relative;
+  overflow: hidden;
+}
+
+.map-controls .btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.map-controls .btn:active {
+  transform: translateY(0);
+}
+
 /* ===== Dark Mode Support ===== */
 [data-theme="dark"] .map-section {
   background: rgba(30, 41, 59, 0.6);
@@ -208,6 +277,139 @@
   background: rgba(30, 41, 59, 0.8);
   border-color: rgba(71, 85, 105, 0.3);
 }
+
+[data-theme="dark"] .map-info-content {
+  background: rgba(30, 41, 59, 0.95);
+  border-color: rgba(71, 85, 105, 0.3);
+  color: #e2e8f0;
+}
+
+[data-theme="dark"] .map-status {
+  background: rgba(30, 41, 59, 0.8);
+  border-color: rgba(71, 85, 105, 0.3);
+  color: #e2e8f0;
+}
+
+/* ===== Enhanced Responsive Design ===== */
+@media (max-width: 767px) {
+  .meeting-edit-container {
+    padding: 0.5rem;
+  }
+
+  .form-content {
+    padding: 1rem;
+  }
+
+  #map-container {
+    height: 40vh;
+    min-height: 280px;
+  }
+
+  .map-controls {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .map-controls .btn {
+    flex: 1;
+    justify-content: center;
+    min-width: auto;
+  }
+
+  .map-info-overlay {
+    top: 5px;
+    left: 5px;
+    right: 5px;
+  }
+
+  .map-info-content {
+    font-size: 0.8rem;
+    padding: 6px 10px;
+  }
+
+  .map-status {
+    flex-direction: column;
+    gap: 4px;
+    align-items: stretch;
+    text-align: center;
+  }
+}
+
+@media (max-width: 576px) {
+  .d-flex.flex-column.flex-md-row {
+    flex-direction: column !important;
+  }
+
+  .btn {
+    width: 100%;
+  }
+
+  #map-container {
+    height: 35vh;
+    min-height: 250px;
+  }
+
+  .map-controls {
+    gap: 0.5rem;
+  }
+
+  .map-controls .btn {
+    padding: 0.5rem;
+    font-size: 0.8rem;
+  }
+}
+
+/* ===== Progress Bar Animation ===== */
+#formProgress {
+  transition: width 0.3s ease;
+}
+
+/* ===== Enhanced Form Validation ===== */
+.form-control.is-invalid {
+  animation: shake 0.5s ease-in-out;
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-5px); }
+  75% { transform: translateX(5px); }
+}
+
+/* ===== Loading States ===== */
+.btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+  transform: none !important;
+}
+
+#locationBtn.loading {
+  position: relative;
+  color: transparent !important;
+}
+
+#locationBtn.loading::after {
+  content: "";
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  top: 50%;
+  left: 50%;
+  margin-left: -7px;
+  margin-top: -7px;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+  border-top-color: transparent;
+  animation: spin 1s linear infinite;
+}
+
+/* ===== Map Theme Toggle ===== */
+#themeMapBtn[data-theme="dark"] .bi-moon::before {
+  content: "\f4a4"; /* sun icon */
+}
+
+#themeMapBtn[data-theme="light"] .bi-moon::before {
+  content: "\f186"; /* moon icon */
+}
 </style>
 {% endblock %}
 
@@ -217,9 +419,7 @@
   <div class="d-flex flex-column flex-lg-row justify-content-between align-items-start align-items-lg-center gap-3 mb-4">
     <div class="flex-grow-1">
       <h1 class="h3 mb-2 d-flex align-items-center gap-3">
-        <div class="avatar bg-warning bg-opacity-15 rounded-3 p-2">
-          <i class="bi bi-pencil-square text-warning fs-4"></i>
-        </div>
+        <i class="bi bi-pencil-square text-warning fs-4"></i>
         <div>
           <span class="fw-bold">Editar Reunión</span>
           <div class="text-muted small mt-1">Modifica los detalles de la reunión</div>
@@ -233,6 +433,11 @@
         <span class="d-none d-sm-inline">Volver</span>
       </a>
     </div>
+  </div>
+
+  <!-- Progress Indicator -->
+  <div class="progress mb-4" style="height: 4px;">
+    <div class="progress-bar bg-warning" role="progressbar" style="width: 0%" id="formProgress"></div>
   </div>
 
   <div class="card border-0 shadow-sm">
@@ -351,26 +556,62 @@
                     </div>
                     
                     <div class="map-section">
-                        <div class="map-controls">
-                            <button type="button" class="btn btn-outline-primary" onclick="getCurrentLocation()" id="locationBtn">
-                                <i class="bi bi-geo-alt"></i> Mi ubicación
-                            </button>
-                            <button type="button" class="btn btn-outline-secondary" onclick="centerMap()">
-                                <i class="bi bi-zoom-in"></i> Centrar mapa
-                            </button>
-                            <button type="button" class="btn btn-outline-secondary" onclick="fullscreenMap()">
-                                <i class="bi bi-arrows-fullscreen"></i> Pantalla completa
-                            </button>
+                        <div class="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-3 mb-3">
+                            <h3 class="mb-0 d-flex align-items-center">
+                                <i class="bi bi-geo-alt-fill text-primary me-2"></i>
+                                Ubicación en Mapa
+                            </h3>
+                            <div class="map-controls d-flex flex-wrap gap-2">
+                                <button type="button" class="btn btn-sm btn-outline-primary d-flex align-items-center gap-2" onclick="getCurrentLocation()" id="locationBtn">
+                                    <i class="bi bi-geo-alt"></i>
+                                    <span class="d-none d-md-inline">Mi ubicación</span>
+                                </button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary d-flex align-items-center gap-2" onclick="centerMap()">
+                                    <i class="bi bi-zoom-in"></i>
+                                    <span class="d-none d-md-inline">Centrar</span>
+                                </button>
+                                <button type="button" class="btn btn-sm btn-outline-info d-flex align-items-center gap-2" onclick="toggleMapTheme()" id="themeMapBtn">
+                                    <i class="bi bi-moon"></i>
+                                    <span class="d-none d-md-inline">Tema</span>
+                                </button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary d-flex align-items-center gap-2" onclick="fullscreenMap()">
+                                    <i class="bi bi-arrows-fullscreen"></i>
+                                    <span class="d-none d-md-inline">Pantalla completa</span>
+                                </button>
+                            </div>
                         </div>
-                        
-                        <div id="map-container">
+
+                        <div id="map-container" class="position-relative">
                             <div class="map-loading" id="mapLoading">
-                                <div class="d-flex align-items-center">
-                                    <div class="spinner-border spinner-border-sm me-2" role="status"></div>
-                                    Cargando mapa...
+                                <div class="d-flex flex-column align-items-center justify-content-center h-100">
+                                    <div class="spinner-border text-primary mb-3" role="status">
+                                        <span class="visually-hidden">Cargando mapa...</span>
+                                    </div>
+                                    <div class="text-muted">Cargando mapa interactivo...</div>
+                                    <div class="text-muted small mt-1">Asegúrate de tener conexión a internet</div>
                                 </div>
                             </div>
                             <div id="map"></div>
+
+                            <!-- Map Info Overlay -->
+                            <div class="map-info-overlay" id="mapInfoOverlay">
+                                <div class="map-info-content">
+                                    <i class="bi bi-info-circle text-info me-2"></i>
+                                    <span>Arrastra el marcador o haz click en el mapa para cambiar la ubicación</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Map Status -->
+                        <div class="map-status mt-3 d-flex justify-content-between align-items-center">
+                            <div class="map-coordinates text-muted small" id="mapCoordinates">
+                                <i class="bi bi-geo-alt me-1"></i>
+                                Coordenadas: <span id="coordDisplay">--</span>
+                            </div>
+                            <div class="map-zoom text-muted small" id="mapZoom">
+                                <i class="bi bi-zoom-in me-1"></i>
+                                Zoom: <span id="zoomDisplay">--</span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -410,6 +651,7 @@
 // Variables globales
 let map, marker;
 let isMapInitialized = false;
+let currentMapTheme = 'light';
 
 // Configuración del mapa
 const mapConfig = {
@@ -418,6 +660,13 @@ const mapConfig = {
     defaultZoom: 15,
     maxZoom: 19,
     minZoom: 3
+};
+
+// URLs de tiles para diferentes temas
+const tileLayers = {
+    light: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    dark: 'https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png',
+    satellite: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
 };
 
 // Inicializar mapa con enfoque más simple
@@ -501,12 +750,27 @@ function initMap() {
             updateCoordinates(pos.lat, pos.lng);
             console.log('Marcador arrastrado a:', pos.lat, pos.lng);
         });
-        
+
         map.on('click', function(e) {
             marker.setLatLng(e.latlng);
             updateCoordinates(e.latlng.lat, e.latlng.lng);
             console.log('Click en mapa:', e.latlng.lat, e.latlng.lng);
         });
+
+        // Actualizar coordenadas y zoom en tiempo real
+        map.on('move', function() {
+            const center = map.getCenter();
+            updateCoordinatesDisplay(center.lat, center.lng);
+        });
+
+        map.on('zoomend', function() {
+            const zoom = map.getZoom();
+            updateZoomDisplay(zoom);
+        });
+
+        // Inicializar displays
+        updateCoordinatesDisplay(lat, lng);
+        updateZoomDisplay(mapConfig.defaultZoom);
         
         // Esperar a que el mapa esté completamente cargado
         map.whenReady(function() {
@@ -576,9 +840,28 @@ function showMapError() {
 function updateCoordinates(lat, lng) {
     document.getElementById('latitud').value = lat.toFixed(6);
     document.getElementById('longitud').value = lng.toFixed(6);
-    
+
+    // Actualizar display de coordenadas
+    updateCoordinatesDisplay(lat, lng);
+
     // Trigger validation
     validateCoordinates();
+}
+
+// Actualizar display de coordenadas en tiempo real
+function updateCoordinatesDisplay(lat, lng) {
+    const coordDisplay = document.getElementById('coordDisplay');
+    if (coordDisplay) {
+        coordDisplay.textContent = `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+    }
+}
+
+// Actualizar display de zoom
+function updateZoomDisplay(zoom) {
+    const zoomDisplay = document.getElementById('zoomDisplay');
+    if (zoomDisplay) {
+        zoomDisplay.textContent = zoom;
+    }
 }
 
 // Centrar mapa en las coordenadas actuales
@@ -588,18 +871,63 @@ function centerMap() {
         initMap();
         return;
     }
-    
+
     const lat = parseFloat(document.getElementById('latitud').value);
     const lng = parseFloat(document.getElementById('longitud').value);
-    
+
     if (!isNaN(lat) && !isNaN(lng) && isValidCoordinate(lat, lng)) {
         map.setView([lat, lng], mapConfig.defaultZoom);
         marker.setLatLng([lat, lng]);
+        updateCoordinatesDisplay(lat, lng);
+        updateZoomDisplay(mapConfig.defaultZoom);
         console.log('Mapa centrado en:', lat, lng);
     } else {
         console.error('Coordenadas inválidas:', lat, lng);
-        alert('Coordenadas inválidas. Verifica los valores ingresados.');
+        showNotification('Coordenadas inválidas. Verifica los valores ingresados.', 'error');
     }
+}
+
+// Cambiar tema del mapa
+function toggleMapTheme() {
+    if (!isMapInitialized || !map) {
+        showNotification('Mapa no inicializado', 'warning');
+        return;
+    }
+
+    const themeBtn = document.getElementById('themeMapBtn');
+    const icon = themeBtn.querySelector('i');
+
+    // Cambiar tema
+    currentMapTheme = currentMapTheme === 'light' ? 'dark' : 'light';
+
+    // Actualizar icono
+    if (currentMapTheme === 'dark') {
+        icon.className = 'bi bi-sun';
+        themeBtn.setAttribute('data-theme', 'dark');
+    } else {
+        icon.className = 'bi bi-moon';
+        themeBtn.setAttribute('data-theme', 'light');
+    }
+
+    // Cambiar capa de tiles
+    const tileUrl = tileLayers[currentMapTheme];
+    const attribution = currentMapTheme === 'satellite' ?
+        '© Esri' : '© OpenStreetMap contributors';
+
+    // Remover capa actual
+    map.eachLayer(function(layer) {
+        if (layer instanceof L.TileLayer) {
+            map.removeLayer(layer);
+        }
+    });
+
+    // Agregar nueva capa
+    const newTileLayer = L.tileLayer(tileUrl, {
+        attribution: attribution,
+        maxZoom: 18
+    }).addTo(map);
+
+    showNotification(`Tema del mapa cambiado a ${currentMapTheme === 'light' ? 'claro' : 'oscuro'}`, 'success');
 }
 
 // Pantalla completa del mapa
@@ -1062,19 +1390,20 @@ function addDynamicStyles() {
 // Inicialización principal simplificada
 function initializeApp() {
     console.log('Inicializando aplicación...');
-    
+
     try {
         // Configurar componentes básicos primero
         setupCharacterCounter();
         setupCoordinateInputs();
         setupBasicFormValidation();
-        
+        setupFormProgressTracking();
+
         // Esperar un poco más para que el DOM esté completamente listo
         setTimeout(() => {
             console.log('Iniciando mapa después del delay...');
             initMap();
         }, 1000);
-        
+
         // Manejar redimensionamiento de ventana
         let resizeTimeout;
         window.addEventListener('resize', function() {
@@ -1086,24 +1415,45 @@ function initializeApp() {
                 }
             }, 300);
         });
-        
+
+        // Ocultar overlay de información del mapa después de 5 segundos
+        setTimeout(() => {
+            const overlay = document.getElementById('mapInfoOverlay');
+            if (overlay) {
+                overlay.style.animation = 'fadeOutUp 0.3s ease-out';
+                setTimeout(() => overlay.style.display = 'none', 300);
+            }
+        }, 5000);
+
         console.log('Aplicación inicializada correctamente');
-        
+
     } catch (error) {
         console.error('Error inicializando aplicación:', error);
     }
+}
+
+// Configuración del seguimiento de progreso del formulario
+function setupFormProgressTracking() {
+    const inputs = document.querySelectorAll('input[required], select[required]');
+    inputs.forEach(input => {
+        input.addEventListener('input', updateFormProgress);
+        input.addEventListener('change', updateFormProgress);
+    });
+
+    // Actualización inicial
+    updateFormProgress();
 }
 
 // Configuración básica del contador de caracteres
 function setupCharacterCounter() {
     const titleInput = document.getElementById('titulo');
     const counter = document.getElementById('titleCount');
-    
+
     if (titleInput && counter) {
         titleInput.addEventListener('input', function() {
             const length = this.value.length;
             counter.textContent = length;
-            
+
             if (length > 90) {
                 counter.style.color = '#dc3545';
             } else if (length > 75) {
@@ -1111,7 +1461,54 @@ function setupCharacterCounter() {
             } else {
                 counter.style.color = '#6c757d';
             }
+
+            updateFormProgress();
         });
+    }
+}
+
+// Indicador de progreso del formulario
+function updateFormProgress() {
+    const progressBar = document.getElementById('formProgress');
+    if (!progressBar) return;
+
+    const inputs = document.querySelectorAll('input[required], select[required]');
+    let completed = 0;
+    let total = inputs.length;
+
+    inputs.forEach(input => {
+        if (input.value.trim() !== '') {
+            completed++;
+        }
+    });
+
+    // Bonus por título largo (>10 caracteres)
+    const titleInput = document.getElementById('titulo');
+    if (titleInput && titleInput.value.length > 10) {
+        completed += 0.5;
+        total += 0.5;
+    }
+
+    // Bonus por coordenadas válidas
+    const lat = parseFloat(document.getElementById('latitud').value);
+    const lng = parseFloat(document.getElementById('longitud').value);
+    if (isValidCoordinate(lat, lng)) {
+        completed += 0.5;
+        total += 0.5;
+    }
+
+    const percentage = Math.min((completed / total) * 100, 100);
+    progressBar.style.width = percentage + '%';
+
+    // Cambiar color según progreso
+    if (percentage < 30) {
+        progressBar.className = 'progress-bar bg-danger';
+    } else if (percentage < 70) {
+        progressBar.className = 'progress-bar bg-warning';
+    } else if (percentage < 100) {
+        progressBar.className = 'progress-bar bg-info';
+    } else {
+        progressBar.className = 'progress-bar bg-success';
     }
 }
 
