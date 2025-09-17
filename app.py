@@ -3282,39 +3282,68 @@ def eliminar_asignacion(id_reunion, id_asignacion):
         return f"❌ Error al eliminar asignación: {e}"
 
 def obtener_reunion(id_reunion):
-    conexion = mysql.connector.connect(**MYSQL_CONFIG)
-    cursor = conexion.cursor(dictionary=True)
-    cursor.execute("SELECT * FROM reuniones WHERE id = %s", (id_reunion,))
-    reunion = cursor.fetchone()
-    conexion.close()
-    return reunion
+    """
+    Obtiene una reunión por ID con manejo robusto de errores.
+    """
+    conn = None
+    cursor = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT * FROM reuniones WHERE id = %s", (id_reunion,))
+        reunion = cursor.fetchone()
+
+        if reunion and isinstance(reunion.get("hora"), timedelta):
+            reunion["hora"] = (datetime.min + reunion["hora"]).time()
+
+        return reunion
+
+    except Exception as e:
+        logger.error(f"Error obteniendo reunión {id_reunion}: {e}")
+        return None
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 
 def obtener_asignaciones(id_reunion):
+    """
+    Obtiene asignaciones de una reunión con información completa de empleados.
+    """
+    conn = None
+    cursor = None
     try:
-        conn = mysql.connector.connect(**MYSQL_CONFIG)
-        cursor = conn.cursor()
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
 
         cursor.execute("""
-            SELECT id, id_reunion, dni_chofer, obligatorio
-            FROM asignaciones_reuniones
-            WHERE id_reunion = %s
+            SELECT ar.id, ar.id_reunion, ar.dni_chofer, ar.obligatorio,
+                   c.nombre, c.sector, c.sucursal_id, s.nombre AS sucursal
+            FROM asignaciones_reuniones ar
+            JOIN choferes c ON ar.dni_chofer = c.dni
+            LEFT JOIN sucursales s ON c.sucursal_id = s.id
+            WHERE ar.id_reunion = %s
+            ORDER BY c.nombre
         """, (id_reunion,))
 
         asignaciones = []
         for row in cursor.fetchall():
             asignaciones.append({
-                'id': row[0],
-                'id_reunion': row[1],
-                'dni_chofer': row[2],
-                'obligatorio': bool(row[3]),
+                'id': row['id'],
+                'id_reunion': row['id_reunion'],
+                'dni_chofer': row['dni_chofer'],
+                'obligatorio': bool(row['obligatorio']),
+                'nombre': row['nombre'],
+                'sector': row['sector'],
+                'sucursal': row['sucursal']
             })
 
         return asignaciones
 
-    except mysql.connector.Error as err:
-        print(f"Error al obtener asignaciones: {err}")
+    except Exception as e:
+        logger.error(f"Error obteniendo asignaciones para reunión {id_reunion}: {e}")
         return []
-
     finally:
         if cursor:
             cursor.close()
