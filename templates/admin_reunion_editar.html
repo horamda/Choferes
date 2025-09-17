@@ -827,6 +827,7 @@
 let map, marker;
 let isMapInitialized = false;
 let currentMapTheme = 'light';
+let mapProvidersStatus = {}; // Para trackear estado de proveedores
 
 // Configuración del mapa
 const mapConfig = {
@@ -837,65 +838,176 @@ const mapConfig = {
     minZoom: 3
 };
 
-// URLs de tiles para diferentes temas con máxima calidad y soporte retina
+// URLs de tiles confiables y gratuitos con máxima calidad
 const tileLayers = {
     light: {
-        url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}{r}.png',
+        url: 'https://tiles.stadiamaps.com/tiles/osm_bright/{z}/{x}/{y}{r}.png',
         options: {
-            attribution: '© OpenStreetMap contributors',
-            maxZoom: 20,
-            maxNativeZoom: 19,
-            tileSize: 256,
-            zoomOffset: 0,
-            detectRetina: true,
-            updateWhenIdle: false,
-            updateWhenZooming: false,
-            keepBuffer: 4
-        }
-    },
-    dark: {
-        url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-        options: {
-            attribution: '© CARTO © OpenStreetMap contributors',
+            attribution: '© <a href="https://www.stadiamaps.com/" target="_blank">Stadia Maps</a> © <a href="https://openmaptiles.org/" target="_blank">OpenMapTiles</a> © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
             maxZoom: 20,
             maxNativeZoom: 18,
             tileSize: 256,
             detectRetina: true,
             updateWhenIdle: false,
             updateWhenZooming: false,
-            keepBuffer: 4
+            keepBuffer: 4,
+            crossOrigin: true
+        }
+    },
+    dark: {
+        url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+        options: {
+            attribution: '© <a href="https://carto.com/attributions">CARTO</a> © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+            maxZoom: 20,
+            maxNativeZoom: 18,
+            tileSize: 256,
+            detectRetina: true,
+            updateWhenIdle: false,
+            updateWhenZooming: false,
+            keepBuffer: 4,
+            crossOrigin: true
         }
     },
     satellite: {
         url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
         options: {
-            attribution: '© Esri © ArcGIS',
-            maxZoom: 20,
-            maxNativeZoom: 19,
+            attribution: '© Esri © ArcGIS © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+            maxZoom: 19,
+            maxNativeZoom: 17,
             tileSize: 256,
             detectRetina: false,
             updateWhenIdle: false,
             updateWhenZooming: false,
-            keepBuffer: 4
+            keepBuffer: 4,
+            crossOrigin: true
+        }
+    },
+    // Proveedor alternativo gratuito
+    terrain: {
+        url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
+        options: {
+            attribution: '© <a href="https://opentopomap.org">OpenTopoMap</a> © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+            maxZoom: 17,
+            maxNativeZoom: 15,
+            tileSize: 256,
+            detectRetina: false,
+            updateWhenIdle: false,
+            updateWhenZooming: false,
+            keepBuffer: 4,
+            crossOrigin: true
         }
     }
 };
 
-// Inicializar mapa con enfoque más simple
-function initMap() {
+// Probar conectividad de proveedores de mapas
+function testMapProvider(provider) {
+    return new Promise((resolve) => {
+        const testTile = document.createElement('img');
+        const testUrl = tileLayers[provider].url
+            .replace('{s}', 'a')
+            .replace('{z}', '1')
+            .replace('{x}', '0')
+            .replace('{y}', '0')
+            .replace('{r}', ''); // Quitar retina para test
+
+        testTile.onload = () => {
+            mapProvidersStatus[provider] = true;
+            resolve(true);
+        };
+
+        testTile.onerror = () => {
+            mapProvidersStatus[provider] = false;
+            resolve(false);
+        };
+
+        testTile.src = testUrl;
+        testTile.style.display = 'none';
+        document.body.appendChild(testTile);
+
+        // Timeout después de 3 segundos
+        setTimeout(() => {
+            if (mapProvidersStatus[provider] === undefined) {
+                mapProvidersStatus[provider] = false;
+                resolve(false);
+            }
+            if (document.body.contains(testTile)) {
+                document.body.removeChild(testTile);
+            }
+        }, 3000);
+    });
+}
+
+// Seleccionar mejor proveedor disponible
+async function selectBestProvider() {
+    const providers = Object.keys(tileLayers);
+    const availableProviders = [];
+
+    // Probar todos los proveedores en paralelo
+    const tests = providers.map(provider => testMapProvider(provider));
+    const results = await Promise.all(tests);
+
+    // Filtrar proveedores disponibles
+    providers.forEach((provider, index) => {
+        if (results[index]) {
+            availableProviders.push(provider);
+        }
+    });
+
+    console.log('Proveedores disponibles:', availableProviders);
+
+    // Preferir light, luego dark, luego satellite, luego terrain
+    const preferredOrder = ['light', 'dark', 'satellite', 'terrain'];
+    for (const preferred of preferredOrder) {
+        if (availableProviders.includes(preferred)) {
+            return preferred;
+        }
+    }
+
+    // Si ninguno funciona, usar el primero disponible
+    return availableProviders[0] || 'light';
+}
+
+// Inicializar mapa con selección automática de proveedor
+async function initMap() {
     console.log('Iniciando mapa...');
-    
+
     try {
         // Verificar que Leaflet esté disponible
         if (typeof L === 'undefined') {
             console.error('Leaflet no está cargado');
             return;
         }
-        
+
+        // Seleccionar mejor proveedor disponible
+        console.log('Probando conectividad de proveedores...');
+        try {
+            currentMapTheme = await selectBestProvider();
+            console.log(`Proveedor seleccionado: ${currentMapTheme}`);
+        } catch (error) {
+            console.warn('Error probando proveedores, usando fallback:', error);
+            currentMapTheme = 'light'; // Fallback seguro
+        }
+
+        // Actualizar UI del botón de tema
+        const themeBtn = document.getElementById('themeMapBtn');
+        if (themeBtn) {
+            const icon = themeBtn.querySelector('i');
+            const themeIcons = {
+                light: 'bi-sun',
+                dark: 'bi-moon',
+                satellite: 'bi-globe',
+                terrain: 'bi-mountains'
+            };
+            if (icon && themeIcons[currentMapTheme]) {
+                icon.className = `bi ${themeIcons[currentMapTheme]}`;
+                themeBtn.setAttribute('data-theme', currentMapTheme);
+            }
+        }
+
         // Obtener coordenadas iniciales
         const lat = parseFloat(document.getElementById('latitud').value) || mapConfig.defaultLat;
         const lng = parseFloat(document.getElementById('longitud').value) || mapConfig.defaultLng;
-        
+
         console.log('Coordenadas iniciales:', lat, lng);
         
         // Verificar que el contenedor existe
@@ -1045,42 +1157,93 @@ function initMap() {
     }
 }
 
-// Mostrar error del mapa
+// Mostrar error del mapa con información de conectividad
 function showMapError() {
     const mapContainer = document.getElementById('map');
     if (mapContainer) {
+        const availableProviders = Object.entries(mapProvidersStatus)
+            .filter(([_, available]) => available)
+            .map(([provider, _]) => provider);
+
+        const providerNames = {
+            light: 'Mapa Claro (Stadia)',
+            dark: 'Mapa Oscuro (CARTO)',
+            satellite: 'Satélite (ArcGIS)',
+            terrain: 'Terreno (OpenTopoMap)'
+        };
+
+        const availableList = availableProviders.length > 0
+            ? `<div style="margin-top: 0.5rem; font-size: 0.8rem;">
+                <strong>Proveedores disponibles:</strong><br>
+                ${availableProviders.map(p => `• ${providerNames[p]}`).join('<br>')}
+               </div>`
+            : '<div style="margin-top: 0.5rem; color: #dc3545; font-size: 0.8rem;">
+                No hay proveedores disponibles. Verifica tu conexión a internet.
+               </div>';
+
         mapContainer.innerHTML = `
             <div style="
-                display: flex; 
-                align-items: center; 
-                justify-content: center; 
-                height: 100%; 
-                background: #f8f9fa; 
-                border-radius: 6px; 
-                flex-direction: column; 
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                height: 100%;
+                background: #f8f9fa;
+                border-radius: 12px;
+                flex-direction: column;
                 color: #6c757d;
                 border: 2px dashed #dee2e6;
                 font-family: inherit;
+                padding: 1rem;
+                text-align: center;
             ">
                 <div style="font-size: 3rem; margin-bottom: 1rem;">🗺️</div>
-                <div style="text-align: center;">
+                <div>
                     <strong>Error al cargar el mapa</strong><br>
-                    <small>Verifica tu conexión a internet y recarga la página</small>
+                    <small style="display: block; margin: 0.5rem 0;">No se pudo conectar con los proveedores de mapas</small>
+                    ${availableList}
                 </div>
-                <button onclick="initMap()" style="
-                    margin-top: 1rem; 
-                    padding: 0.5rem 1rem; 
-                    background: #007bff; 
-                    color: white; 
-                    border: none; 
-                    border-radius: 4px; 
-                    cursor: pointer;
-                ">
-                    Reintentar
-                </button>
+                <div style="margin-top: 1rem;">
+                    <button onclick="initMap()" style="
+                        padding: 0.5rem 1rem;
+                        background: #007bff;
+                        color: white;
+                        border: none;
+                        border-radius: 6px;
+                        cursor: pointer;
+                        margin-right: 0.5rem;
+                    ">
+                        Reintentar
+                    </button>
+                    <button onclick="showConnectivityInfo()" style="
+                        padding: 0.5rem 1rem;
+                        background: #6c757d;
+                        color: white;
+                        border: none;
+                        border-radius: 6px;
+                        cursor: pointer;
+                    ">
+                        Ver Estado
+                    </button>
+                </div>
             </div>
         `;
     }
+}
+
+// Mostrar información de conectividad
+function showConnectivityInfo() {
+    const statusInfo = Object.entries(mapProvidersStatus).map(([provider, available]) => {
+        const status = available ? '✅ Disponible' : '❌ No disponible';
+        const names = {
+            light: 'Mapa Claro (Stadia)',
+            dark: 'Mapa Oscuro (CARTO)',
+            satellite: 'Satélite (ArcGIS)',
+            terrain: 'Terreno (OpenTopoMap)'
+        };
+        return `${names[provider]}: ${status}`;
+    }).join('\n');
+
+    alert(`Estado de conectividad de proveedores:\n\n${statusInfo}\n\nSi todos los proveedores fallan, verifica tu conexión a internet.`);
 }
 
 // Actualizar coordenadas en los inputs
@@ -1134,8 +1297,8 @@ function centerMap() {
     }
 }
 
-// Cambiar tema del mapa
-function toggleMapTheme() {
+// Cambiar tema del mapa con fallback automático
+async function toggleMapTheme() {
     if (!isMapInitialized || !map) {
         showNotification('Mapa no inicializado', 'warning');
         return;
@@ -1143,28 +1306,53 @@ function toggleMapTheme() {
 
     const themeBtn = document.getElementById('themeMapBtn');
     const icon = themeBtn.querySelector('i');
+    const originalContent = themeBtn.innerHTML;
 
-    // Cambiar tema cíclicamente: light -> dark -> satellite -> light
-    const themes = ['light', 'dark', 'satellite'];
-    const currentIndex = themes.indexOf(currentMapTheme);
-    currentMapTheme = themes[(currentIndex + 1) % themes.length];
+    // Mostrar estado de carga
+    themeBtn.innerHTML = '<div class="spinner-border spinner-border-sm"></div>';
+    themeBtn.disabled = true;
+
+    try {
+        // Cambiar tema cíclicamente: light -> dark -> satellite -> terrain -> light
+        const themes = ['light', 'dark', 'satellite', 'terrain'];
+        const currentIndex = themes.indexOf(currentMapTheme);
+        let nextTheme = themes[(currentIndex + 1) % themes.length];
+
+        // Verificar si el siguiente tema está disponible
+        if (!mapProvidersStatus[nextTheme]) {
+            console.log(`Proveedor ${nextTheme} no disponible, probando conectividad...`);
+            const isAvailable = await testMapProvider(nextTheme);
+            if (!isAvailable) {
+                // Buscar siguiente disponible
+                for (const theme of themes) {
+                    if (theme !== currentMapTheme && mapProvidersStatus[theme]) {
+                        nextTheme = theme;
+                        break;
+                    }
+                }
+            }
+        }
+
+        currentMapTheme = nextTheme;
 
     // Actualizar icono y tooltip
     const themeIcons = {
         light: 'bi-sun',
         dark: 'bi-moon',
-        satellite: 'bi-globe'
+        satellite: 'bi-globe',
+        terrain: 'bi-mountains'
     };
 
     const themeNames = {
-        light: 'Tema Claro',
-        dark: 'Tema Oscuro',
-        satellite: 'Satélite'
+        light: 'Mapa Claro',
+        dark: 'Mapa Oscuro',
+        satellite: 'Satélite',
+        terrain: 'Terreno'
     };
 
     icon.className = `bi ${themeIcons[currentMapTheme]}`;
     themeBtn.setAttribute('data-theme', currentMapTheme);
-    themeBtn.setAttribute('title', themeNames[currentMapTheme]);
+    themeBtn.setAttribute('title', `Cambiar a ${themeNames[currentMapTheme]}`);
 
     // Remover capa actual
     map.eachLayer(function(layer) {
@@ -1173,16 +1361,66 @@ function toggleMapTheme() {
         }
     });
 
-    // Agregar nueva capa con configuración optimizada
+    // Agregar nueva capa con configuración optimizada y fallback
     const tileConfig = tileLayers[currentMapTheme];
-    const newTileLayer = L.tileLayer(tileConfig.url, tileConfig.options).addTo(map);
+    const newTileLayer = L.tileLayer(tileConfig.url, {
+        ...tileConfig.options,
+        // Fallback automático si falla la carga
+        errorTileUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=='
+    });
 
-    // Pequeño delay para asegurar que los tiles se carguen correctamente
-    setTimeout(() => {
-        map.invalidateSize();
-    }, 100);
+    // Manejar errores de carga del tile layer
+    newTileLayer.on('tileerror', function(e) {
+        console.warn(`Error cargando tile del tema ${currentMapTheme}, intentando fallback...`);
 
-    showNotification(`Tema del mapa: ${themeNames[currentMapTheme]}`, 'success');
+        // Si falla, intentar con el siguiente tema automáticamente
+        const nextThemes = themes.filter(t => t !== currentMapTheme);
+        const fallbackTheme = nextThemes[0];
+
+        if (fallbackTheme && fallbackTheme !== currentMapTheme) {
+            console.log(`Cambiando automáticamente a tema fallback: ${fallbackTheme}`);
+            currentMapTheme = fallbackTheme;
+
+            // Actualizar UI
+            icon.className = `bi ${themeIcons[currentMapTheme]}`;
+            themeBtn.setAttribute('data-theme', currentMapTheme);
+
+            // Cargar tema fallback
+            const fallbackConfig = tileLayers[fallbackTheme];
+            const fallbackLayer = L.tileLayer(fallbackConfig.url, fallbackConfig.options).addTo(map);
+
+            showNotification(`Tema cambiado automáticamente a ${themeNames[fallbackTheme]} (problema de conexión)`, 'warning');
+        }
+    });
+
+    newTileLayer.addTo(map);
+
+        // Pequeño delay para asegurar que los tiles se carguen correctamente
+        setTimeout(() => {
+            map.invalidateSize();
+        }, 100);
+
+        showNotification(`Tema del mapa: ${themeNames[currentMapTheme]}`, 'success');
+
+    } catch (error) {
+        console.error('Error cambiando tema del mapa:', error);
+        showNotification('Error al cambiar tema del mapa', 'error');
+    } finally {
+        // Restaurar botón
+        themeBtn.innerHTML = originalContent;
+        themeBtn.disabled = false;
+
+        // Actualizar icono final
+        const themeIcons = {
+            light: 'bi-sun',
+            dark: 'bi-moon',
+            satellite: 'bi-globe',
+            terrain: 'bi-mountains'
+        };
+        icon.className = `bi ${themeIcons[currentMapTheme]}`;
+        themeBtn.setAttribute('data-theme', currentMapTheme);
+        themeBtn.setAttribute('title', `Cambiar a ${themeNames[currentMapTheme]}`);
+    }
 }
 
 // Reset map view to initial coordinates
@@ -1667,8 +1905,8 @@ function addDynamicStyles() {
     document.head.appendChild(style);
 }
 
-// Inicialización principal simplificada
-function initializeApp() {
+// Inicialización principal con async/await
+async function initializeApp() {
     console.log('Inicializando aplicación...');
 
     try {
@@ -1678,10 +1916,39 @@ function initializeApp() {
         setupBasicFormValidation();
         setupFormProgressTracking();
 
+        // Mostrar indicador de carga del mapa
+        const mapContainer = document.getElementById('map');
+        if (mapContainer) {
+            const loadingDiv = document.createElement('div');
+            loadingDiv.id = 'mapInitLoading';
+            loadingDiv.style.cssText = `
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                z-index: 1000;
+                text-align: center;
+                color: #6c757d;
+            `;
+            loadingDiv.innerHTML = `
+                <div class="spinner-border text-primary mb-2" role="status">
+                    <span class="visually-hidden">Cargando mapa...</span>
+                </div>
+                <div>Probando conexión con proveedores de mapas...</div>
+            `;
+            mapContainer.appendChild(loadingDiv);
+        }
+
         // Esperar un poco más para que el DOM esté completamente listo
-        setTimeout(() => {
+        setTimeout(async () => {
             console.log('Iniciando mapa después del delay...');
-            initMap();
+            await initMap();
+
+            // Remover indicador de carga
+            const loadingDiv = document.getElementById('mapInitLoading');
+            if (loadingDiv) {
+                loadingDiv.remove();
+            }
         }, 1000);
 
         // Manejar redimensionamiento de ventana
