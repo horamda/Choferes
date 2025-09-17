@@ -1,34 +1,44 @@
-{% extends "base.html" %}
-
-{% block title %}Panel de Reuniones{% endblock %}
-
-{% block content %}
+{% extends "base.html" %} {% block title %}Panel de Reuniones{% endblock %} {%
+block content %}
 <div class="fade-in-up">
   <!-- Header Section -->
-  <div class="d-flex flex-column flex-lg-row justify-content-between align-items-start align-items-lg-center gap-3 mb-4">
+  <div
+    class="d-flex flex-column flex-lg-row justify-content-between align-items-start align-items-lg-center gap-3 mb-4"
+  >
     <div class="flex-grow-1">
-      <h1 class="h3 mb-2 d-flex align-items-center gap-3">
-        <div class="avatar bg-primary bg-opacity-15 rounded-3 p-1">
-          <i class="bi bi-calendar-event-fill text-primary fs-5"></i>
-        </div>
+      <h1 class="h3 mb-2 d-flex align-items-center gap-2">
+        <i class="bi bi-calendar-event-fill text-primary fs-5 me-2"></i>
         <div>
           <span class="fw-bold">Panel de Reuniones</span>
-          <div class="text-muted small mt-1">Gestiona reuniones y asignaciones de empleados</div>
+          <div class="text-muted small mt-1">
+            Gestiona reuniones y asignaciones de empleados
+          </div>
         </div>
       </h1>
     </div>
 
     <div class="d-flex flex-wrap gap-2">
-      <a href="{{ url_for('asignaciones_global') }}" class="btn btn-sm btn-outline-info d-flex align-items-center gap-2">
+      <a
+        href="{{ url_for('asignaciones_global') }}"
+        class="btn btn-sm btn-outline-info d-flex align-items-center gap-2"
+      >
         <i class="bi bi-people"></i>
         <span class="d-none d-sm-inline">Asignaciones</span>
       </a>
 
-      <button onclick="toggleTheme()" class="btn btn-sm btn-outline-secondary d-flex align-items-center justify-content-center" style="width: 36px; height: 36px; padding: 0;" title="Cambiar tema">
+      <button
+        onclick="toggleTheme()"
+        class="btn btn-sm btn-outline-secondary d-flex align-items-center justify-content-center"
+        style="width: 36px; height: 36px; padding: 0"
+        title="Cambiar tema"
+      >
         <i class="bi bi-moon" id="theme-icon"></i>
       </button>
 
-      <a href="{{ url_for('nueva_reunion_admin') }}" class="btn btn-sm btn-primary d-flex align-items-center gap-2">
+      <a
+        href="{{ url_for('nueva_reunion_admin') }}"
+        class="btn btn-sm btn-primary d-flex align-items-center gap-2"
+      >
         <i class="bi bi-plus-circle"></i>
         <span class="d-none d-sm-inline">Nueva Reunión</span>
       </a>
@@ -44,7 +54,9 @@
           <div class="stat-icon mb-3">
             <i class="bi bi-calendar-event text-primary fs-1"></i>
           </div>
-          <div class="stat-number display-6 fw-bold text-primary mb-2">{{ reuniones|length }}</div>
+          <div class="stat-number display-6 fw-bold text-primary mb-2">
+            {{ reuniones|length }}
+          </div>
           <div class="stat-label text-muted small">Reuniones activas</div>
         </div>
       </div>
@@ -58,13 +70,11 @@
             <i class="bi bi-clock-history text-success fs-1"></i>
           </div>
           <div class="stat-number h4 fw-bold text-success mb-2">
-            {% set proxima = reuniones|selectattr('activa', 'equalto', True)|list|first if reuniones else None %}
-            {% if proxima %}
-              {% set dias = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'] %}
-              {{ dias[proxima.dia_semana] }}
-            {% else %}
-              Sin reuniones
-            {% endif %}
+            {% set proxima = reuniones|selectattr('activa', 'equalto',
+            True)|list|first if reuniones else None %} {% if proxima %} {% set
+            dias = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes',
+            'Sábado', 'Domingo'] %} {{ dias[proxima.dia_semana] }} {% else %}
+            Sin reuniones {% endif %}
           </div>
           <div class="stat-label text-muted small">Próxima reunión</div>
         </div>
@@ -79,11 +89,10 @@
             <i class="bi bi-check-circle-fill text-info fs-1"></i>
           </div>
           <div class="stat-number h4 fw-bold text-info mb-2">
-            {% set total_asistencias = 0 %}
-            {% for reunion in reuniones %}
-              {% set total_asistencias = total_asistencias + (reunion.cantidad_asignados|default(0)) %}
-            {% endfor %}
-            {{ total_asistencias }}
+            {% set total_asistencias = 0 %} {% for reunion in reuniones %} {%
+            set total_asistencias = total_asistencias +
+            (reunion.cantidad_asignados|default(0)) %} {% endfor %} {{
+            total_asistencias }}
           </div>
           <div class="stat-label text-muted small">Asignaciones totales</div>
         </div>
@@ -98,9 +107,10 @@
             <i class="bi bi-arrow-repeat text-warning fs-1"></i>
           </div>
           <div class="stat-number h4 fw-bold text-warning mb-2">
-            {% set semanal = reuniones|selectattr('frecuencia', 'equalto', 'semanal')|list|length %}
-            {% set mensual = reuniones|selectattr('frecuencia', 'equalto', 'mensual')|list|length %}
-            {{ semanal + mensual }}
+            {% set semanal = reuniones|selectattr('frecuencia', 'equalto',
+            'semanal')|list|length %} {% set mensual =
+            reuniones|selectattr('frecuencia', 'equalto', 'mensual')|list|length
+            %} {{ semanal + mensual }}
           </div>
           <div class="stat-label text-muted small">Reuniones recurrentes</div>
         </div>
@@ -114,12 +124,16 @@
     <!-- Card View for Mobile -->
     <div class="col-12 d-lg-none">
       <div class="card border-0 shadow-sm hover-lift">
-        <div class="card-header bg-gradient-primary text-white border-0 d-flex justify-content-between align-items-center">
+        <div
+          class="card-header bg-gradient-primary text-white border-0 d-flex justify-content-between align-items-center"
+        >
           <h6 class="card-title mb-0 d-flex align-items-center">
             <i class="bi bi-calendar-event me-2"></i>
             {{ reunion.titulo }}
           </h6>
-          <span class="badge bg-white bg-opacity-20 text-white">#{{ reunion.id }}</span>
+          <span class="badge bg-white bg-opacity-20 text-white"
+            >#{{ reunion.id }}</span
+          >
         </div>
         <div class="card-body">
           <div class="row g-3">
@@ -128,7 +142,9 @@
                 <i class="bi bi-arrow-repeat text-primary"></i>
                 <div>
                   <div class="small text-muted">Frecuencia</div>
-                  <span class="badge bg-primary bg-opacity-10 text-primary">{{ reunion.frecuencia }}</span>
+                  <span class="badge bg-primary bg-opacity-10 text-primary"
+                    >{{ reunion.frecuencia }}</span
+                  >
                 </div>
               </div>
             </div>
@@ -137,8 +153,11 @@
                 <i class="bi bi-calendar-day text-success"></i>
                 <div>
                   <div class="small text-muted">Día</div>
-                  {% set dias = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'] %}
-                  <span class="badge bg-success bg-opacity-10 text-success">{{ dias[reunion.dia_semana] }}</span>
+                  {% set dias = ['Lunes', 'Martes', 'Miércoles', 'Jueves',
+                  'Viernes', 'Sábado', 'Domingo'] %}
+                  <span class="badge bg-success bg-opacity-10 text-success"
+                    >{{ dias[reunion.dia_semana] }}</span
+                  >
                 </div>
               </div>
             </div>
@@ -148,7 +167,8 @@
                 <div>
                   <div class="small text-muted">Hora</div>
                   <span class="badge bg-warning bg-opacity-10 text-warning">
-                    {{ ("%02d:%02d"|format(reunion.hora.seconds // 3600, (reunion.hora.seconds // 60) % 60)) }}
+                    {{ ("%02d:%02d"|format(reunion.hora.seconds // 3600,
+                    (reunion.hora.seconds // 60) % 60)) }}
                   </span>
                 </div>
               </div>
@@ -159,8 +179,12 @@
                 <div>
                   <div class="small text-muted">Ubicación</div>
                   {% if reunion.latitud and reunion.longitud %}
-                  <a href="https://www.google.com/maps/search/?api=1&query={{ reunion.latitud }},{{ reunion.longitud }}"
-                     target="_blank" class="text-danger" title="Ver en mapa">
+                  <a
+                    href="https://www.google.com/maps/search/?api=1&query={{ reunion.latitud }},{{ reunion.longitud }}"
+                    target="_blank"
+                    class="text-danger"
+                    title="Ver en mapa"
+                  >
                     <i class="bi bi-geo-alt-fill"></i>
                   </a>
                   {% else %}
@@ -175,11 +199,13 @@
           <div class="mt-3 text-center">
             {% if reunion.qr_code %}
             <div class="qr-container-mobile">
-              <img src="{{ url_for('static', filename=reunion.qr_code) }}"
-                   alt="QR Code para {{ reunion.titulo }}"
-                   class="qr-image-mobile rounded-3 shadow-sm"
-                   onclick="openQRModal('{{ url_for('static', filename=reunion.qr_code) }}', '{{ reunion.titulo }}')"
-                   title="Click para ver en tamaño completo">
+              <img
+                src="{{ url_for('static', filename=reunion.qr_code) }}"
+                alt="QR Code para {{ reunion.titulo }}"
+                class="qr-image-mobile rounded-3 shadow-sm"
+                onclick="openQRModal('{{ url_for('static', filename=reunion.qr_code) }}', '{{ reunion.titulo }}')"
+                title="Click para ver en tamaño completo"
+              />
               <div class="small text-muted mt-2">Código QR de asistencia</div>
             </div>
             {% else %}
@@ -192,17 +218,23 @@
 
           <!-- Actions Mobile -->
           <div class="d-flex gap-2 mt-3">
-            <a href="{{ url_for('ver_asignaciones_reunion', id_reunion=reunion.id) }}"
-               class="btn btn-sm btn-outline-info flex-fill">
+            <a
+              href="{{ url_for('ver_asignaciones_reunion', id_reunion=reunion.id) }}"
+              class="btn btn-sm btn-outline-info flex-fill"
+            >
               <i class="bi bi-people me-1"></i>Asignaciones
             </a>
-            <a href="{{ url_for('editar_reunion_admin', id=reunion.id) }}"
-               class="btn btn-sm btn-outline-warning flex-fill">
+            <a
+              href="{{ url_for('editar_reunion_admin', id=reunion.id) }}"
+              class="btn btn-sm btn-outline-warning flex-fill"
+            >
               <i class="bi bi-pencil me-1"></i>Editar
             </a>
-            <a href="{{ url_for('eliminar_reunion_admin', id=reunion.id) }}"
-               class="btn btn-sm btn-outline-danger flex-fill"
-               onclick="return confirm('¿Seguro que querés eliminar esta reunión?')">
+            <a
+              href="{{ url_for('eliminar_reunion_admin', id=reunion.id) }}"
+              class="btn btn-sm btn-outline-danger flex-fill"
+              onclick="return confirm('¿Seguro que querés eliminar esta reunión?')"
+            >
               <i class="bi bi-trash me-1"></i>Eliminar
             </a>
           </div>
@@ -218,7 +250,10 @@
             <!-- ID y Título -->
             <div class="col-lg-3">
               <div class="d-flex align-items-center gap-3">
-                <div class="avatar bg-primary bg-opacity-10 rounded-circle d-flex align-items-center justify-content-center text-primary fw-bold" style="width: 40px; height: 40px;">
+                <div
+                  class="avatar bg-primary bg-opacity-10 rounded-circle d-flex align-items-center justify-content-center text-primary fw-bold"
+                  style="width: 40px; height: 40px"
+                >
                   #{{ reunion.id }}
                 </div>
                 <div>
@@ -232,7 +267,9 @@
             <div class="col-lg-2">
               <div class="d-flex align-items-center gap-2">
                 <i class="bi bi-arrow-repeat text-primary"></i>
-                <span class="badge bg-primary bg-opacity-10 text-primary">{{ reunion.frecuencia }}</span>
+                <span class="badge bg-primary bg-opacity-10 text-primary"
+                  >{{ reunion.frecuencia }}</span
+                >
               </div>
             </div>
 
@@ -241,13 +278,17 @@
               <div class="d-flex flex-column gap-1">
                 <div class="d-flex align-items-center gap-2">
                   <i class="bi bi-calendar-day text-success"></i>
-                  {% set dias = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'] %}
-                  <span class="badge bg-success bg-opacity-10 text-success">{{ dias[reunion.dia_semana] }}</span>
+                  {% set dias = ['Lunes', 'Martes', 'Miércoles', 'Jueves',
+                  'Viernes', 'Sábado', 'Domingo'] %}
+                  <span class="badge bg-success bg-opacity-10 text-success"
+                    >{{ dias[reunion.dia_semana] }}</span
+                  >
                 </div>
                 <div class="d-flex align-items-center gap-2 ms-3">
                   <i class="bi bi-clock text-warning"></i>
                   <span class="badge bg-warning bg-opacity-10 text-warning">
-                    {{ ("%02d:%02d"|format(reunion.hora.seconds // 3600, (reunion.hora.seconds // 60) % 60)) }}
+                    {{ ("%02d:%02d"|format(reunion.hora.seconds // 3600,
+                    (reunion.hora.seconds // 60) % 60)) }}
                   </span>
                 </div>
               </div>
@@ -258,8 +299,12 @@
               <div class="d-flex align-items-center gap-2">
                 <i class="bi bi-geo-alt text-danger"></i>
                 {% if reunion.latitud and reunion.longitud %}
-                <a href="https://www.google.com/maps/search/?api=1&query={{ reunion.latitud }},{{ reunion.longitud }}"
-                   target="_blank" class="text-danger" title="Ver en mapa">
+                <a
+                  href="https://www.google.com/maps/search/?api=1&query={{ reunion.latitud }},{{ reunion.longitud }}"
+                  target="_blank"
+                  class="text-danger"
+                  title="Ver en mapa"
+                >
                   <i class="bi bi-geo-alt-fill fs-5"></i>
                 </a>
                 {% else %}
@@ -272,11 +317,13 @@
             <div class="col-lg-2 text-center">
               {% if reunion.qr_code %}
               <div class="qr-container">
-                <img src="{{ url_for('static', filename=reunion.qr_code) }}"
-                     alt="QR Code para {{ reunion.titulo }}"
-                     class="qr-image rounded-3 shadow-sm"
-                     onclick="openQRModal('{{ url_for('static', filename=reunion.qr_code) }}', '{{ reunion.titulo }}')"
-                     title="Click para ver en tamaño completo">
+                <img
+                  src="{{ url_for('static', filename=reunion.qr_code) }}"
+                  alt="QR Code para {{ reunion.titulo }}"
+                  class="qr-image rounded-3 shadow-sm"
+                  onclick="openQRModal('{{ url_for('static', filename=reunion.qr_code) }}', '{{ reunion.titulo }}')"
+                  title="Click para ver en tamaño completo"
+                />
               </div>
               {% else %}
               <div class="text-center text-muted">
@@ -289,18 +336,26 @@
             <!-- Actions -->
             <div class="col-lg-1">
               <div class="d-flex gap-1">
-                <a href="{{ url_for('ver_asignaciones_reunion', id_reunion=reunion.id) }}"
-                   class="btn btn-sm btn-outline-info" title="Ver asignaciones">
+                <a
+                  href="{{ url_for('ver_asignaciones_reunion', id_reunion=reunion.id) }}"
+                  class="btn btn-sm btn-outline-info"
+                  title="Ver asignaciones"
+                >
                   <i class="bi bi-people"></i>
                 </a>
-                <a href="{{ url_for('editar_reunion_admin', id=reunion.id) }}"
-                   class="btn btn-sm btn-outline-warning" title="Editar reunión">
+                <a
+                  href="{{ url_for('editar_reunion_admin', id=reunion.id) }}"
+                  class="btn btn-sm btn-outline-warning"
+                  title="Editar reunión"
+                >
                   <i class="bi bi-pencil"></i>
                 </a>
-                <a href="{{ url_for('eliminar_reunion_admin', id=reunion.id) }}"
-                   class="btn btn-sm btn-outline-danger"
-                   onclick="return confirm('¿Seguro que querés eliminar esta reunión?')"
-                   title="Eliminar reunión">
+                <a
+                  href="{{ url_for('eliminar_reunion_admin', id=reunion.id) }}"
+                  class="btn btn-sm btn-outline-danger"
+                  onclick="return confirm('¿Seguro que querés eliminar esta reunión?')"
+                  title="Eliminar reunión"
+                >
                   <i class="bi bi-trash"></i>
                 </a>
               </div>
@@ -316,12 +371,21 @@
     <div class="col-12">
       <div class="card border-0 shadow-sm">
         <div class="card-body text-center py-5">
-          <div class="avatar bg-light rounded-circle mx-auto mb-4 d-flex align-items-center justify-content-center" style="width: 80px; height: 80px;">
+          <div
+            class="avatar bg-light rounded-circle mx-auto mb-4 d-flex align-items-center justify-content-center"
+            style="width: 80px; height: 80px"
+          >
             <i class="bi bi-calendar-x fs-1 text-muted"></i>
           </div>
           <h5 class="text-muted mb-3">No hay reuniones activas</h5>
-          <p class="text-muted mb-4">Crea tu primera reunión para comenzar a gestionar las asistencias de tus empleados.</p>
-          <a href="{{ url_for('nueva_reunion_admin') }}" class="btn btn-primary">
+          <p class="text-muted mb-4">
+            Crea tu primera reunión para comenzar a gestionar las asistencias de
+            tus empleados.
+          </p>
+          <a
+            href="{{ url_for('nueva_reunion_admin') }}"
+            class="btn btn-primary"
+          >
             <i class="bi bi-plus-circle me-2"></i>Crear Primera Reunión
           </a>
         </div>
@@ -331,291 +395,298 @@
   </div>
 </div>
 
-
 <style>
-/* ===== CSS Variables for Modern Design ===== */
-:root {
-  --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  --success-gradient: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
-  --info-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  /* ===== CSS Variables for Modern Design ===== */
+  :root {
+    --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    --success-gradient: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+    --info-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
 
-  /* Enhanced shadows */
-  --shadow-soft: 0 2px 15px rgba(0, 0, 0, 0.08);
-  --shadow-medium: 0 4px 25px rgba(0, 0, 0, 0.12);
-  --shadow-strong: 0 8px 35px rgba(0, 0, 0, 0.15);
+    /* Enhanced shadows */
+    --shadow-soft: 0 2px 15px rgba(0, 0, 0, 0.08);
+    --shadow-medium: 0 4px 25px rgba(0, 0, 0, 0.12);
+    --shadow-strong: 0 8px 35px rgba(0, 0, 0, 0.15);
 
-  /* Transitions */
-  --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-bounce: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
-}
-
-/* ===== Dark Mode Enhancements ===== */
-[data-theme="dark"] {
-  --primary-gradient: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
-  --success-gradient: linear-gradient(135deg, #059669 0%, #10b981 100%);
-  --info-gradient: linear-gradient(135deg, #0891b2 0%, #06b6d4 100%);
-
-  --shadow-soft: 0 2px 15px rgba(0, 0, 0, 0.25);
-  --shadow-medium: 0 4px 25px rgba(0, 0, 0, 0.35);
-  --shadow-strong: 0 8px 35px rgba(0, 0, 0, 0.45);
-}
-
-/* ===== Base Styles ===== */
-.fade-in-up {
-  animation: fadeInUp 0.8s ease-out;
-}
-
-@keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(30px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-/* ===== Cards ===== */
-.card {
-  border-radius: 16px;
-  transition: var(--transition-smooth);
-  backdrop-filter: blur(10px);
-}
-
-.card:hover {
-  transform: translateY(-4px);
-  box-shadow: var(--shadow-strong);
-}
-
-.bg-gradient-primary {
-  background: var(--primary-gradient) !important;
-}
-
-/* ===== Stat Cards ===== */
-.stat-card {
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0.7) 100%);
-  backdrop-filter: blur(15px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  transition: var(--transition-bounce);
-}
-
-.stat-card:hover {
-  transform: translateY(-8px) scale(1.02);
-  box-shadow: var(--shadow-strong);
-}
-
-.stat-icon {
-  width: 64px;
-  height: 64px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.75rem;
-  background: rgba(255, 255, 255, 0.9);
-  box-shadow: var(--shadow-medium);
-  margin: 0 auto;
-}
-
-/* ===== Buttons ===== */
-.btn {
-  border-radius: 10px;
-  font-weight: 600;
-  transition: var(--transition-smooth);
-  border: none;
-  position: relative;
-  overflow: hidden;
-}
-
-.btn-primary {
-  background: var(--primary-gradient);
-  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
-}
-
-.btn-outline-primary {
-  border: 2px solid;
-  background: transparent;
-}
-
-.btn-outline-primary:hover {
-  background: var(--primary-gradient);
-  color: white;
-}
-
-/* ===== Hover Effects ===== */
-.hover-lift {
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.hover-lift:hover {
-  transform: translateY(-4px);
-  box-shadow: var(--shadow-strong);
-}
-
-/* ===== Avatar Styles ===== */
-.avatar {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  border: 2px solid rgba(255, 255, 255, 0.8);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.avatar:hover {
-  border-color: var(--primary-color);
-  transform: scale(1.05);
-}
-
-/* ===== QR Code Styles ===== */
-.qr-container {
-  position: relative;
-  display: inline-block;
-}
-
-.qr-image {
-  width: 50px;
-  height: 50px;
-  border-radius: 8px;
-  border: 2px solid rgba(255, 255, 255, 0.8);
-  cursor: pointer;
-  transition: var(--transition-smooth);
-  object-fit: contain;
-  background-color: white;
-  padding: 3px;
-}
-
-.qr-image:hover {
-  transform: scale(1.1);
-  border-color: var(--primary-color);
-  box-shadow: var(--shadow-medium);
-}
-
-.qr-container-mobile {
-  display: inline-block;
-}
-
-.qr-image-mobile {
-  width: 80px;
-  height: 80px;
-  border-radius: 12px;
-  border: 2px solid rgba(255, 255, 255, 0.8);
-  cursor: pointer;
-  transition: var(--transition-smooth);
-  object-fit: contain;
-  background-color: white;
-  padding: 8px;
-}
-
-.qr-image-mobile:hover {
-  transform: scale(1.05);
-  border-color: var(--primary-color);
-  box-shadow: var(--shadow-medium);
-}
-
-/* ===== Modal Styles ===== */
-.modal-content {
-  background-color: var(--bg-color);
-  color: var(--text-color);
-  border-color: var(--border-color);
-  border-radius: 16px;
-  border: none;
-  box-shadow: var(--shadow-strong);
-}
-
-.modal-header {
-  border-bottom-color: var(--border-color);
-  border-radius: 16px 16px 0 0;
-}
-
-#qrModalImage {
-  max-width: 300px;
-  max-height: 300px;
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.8);
-  background-color: white;
-  padding: 16px;
-}
-
-/* ===== Dark Mode Specific ===== */
-[data-theme="dark"] .stat-card {
-  background: linear-gradient(135deg, rgba(30, 41, 59, 0.9) 0%, rgba(30, 41, 59, 0.7) 100%);
-  border-color: rgba(71, 85, 105, 0.3);
-}
-
-/* ===== Responsive Design ===== */
-@media (max-width: 768px) {
-  .stat-card .card-body {
-    padding: 1.5rem 1rem;
+    /* Transitions */
+    --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-bounce: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
   }
 
-  .display-6 {
-    font-size: 2rem;
+  /* ===== Dark Mode Enhancements ===== */
+  [data-theme="dark"] {
+    --primary-gradient: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+    --success-gradient: linear-gradient(135deg, #059669 0%, #10b981 100%);
+    --info-gradient: linear-gradient(135deg, #0891b2 0%, #06b6d4 100%);
+
+    --shadow-soft: 0 2px 15px rgba(0, 0, 0, 0.25);
+    --shadow-medium: 0 4px 25px rgba(0, 0, 0, 0.35);
+    --shadow-strong: 0 8px 35px rgba(0, 0, 0, 0.45);
   }
 
-  .btn {
-    width: 100%;
+  /* ===== Base Styles ===== */
+  .fade-in-up {
+    animation: fadeInUp 0.8s ease-out;
   }
-}
 
-@media (max-width: 576px) {
-  .avatar {
-    width: 32px;
-    height: 32px;
+  @keyframes fadeInUp {
+    from {
+      opacity: 0;
+      transform: translateY(30px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* ===== Cards ===== */
+  .card {
+    border-radius: 16px;
+    transition: var(--transition-smooth);
+    backdrop-filter: blur(10px);
+  }
+
+  .card:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-strong);
+  }
+
+  .bg-gradient-primary {
+    background: var(--primary-gradient) !important;
+  }
+
+  /* ===== Stat Cards ===== */
+  .stat-card {
+    background: linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.9) 0%,
+      rgba(255, 255, 255, 0.7) 100%
+    );
+    backdrop-filter: blur(15px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    transition: var(--transition-bounce);
+  }
+
+  .stat-card:hover {
+    transform: translateY(-8px) scale(1.02);
+    box-shadow: var(--shadow-strong);
   }
 
   .stat-icon {
-    width: 48px;
-    height: 48px;
-    font-size: 1.25rem;
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.75rem;
+    background: rgba(255, 255, 255, 0.9);
+    box-shadow: var(--shadow-medium);
+    margin: 0 auto;
+  }
+
+  /* ===== Buttons ===== */
+  .btn {
+    border-radius: 10px;
+    font-weight: 600;
+    transition: var(--transition-smooth);
+    border: none;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .btn-primary {
+    background: var(--primary-gradient);
+    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+  }
+
+  .btn-outline-primary {
+    border: 2px solid;
+    background: transparent;
+  }
+
+  .btn-outline-primary:hover {
+    background: var(--primary-gradient);
+    color: white;
+  }
+
+  /* ===== Hover Effects ===== */
+  .hover-lift {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .hover-lift:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-strong);
+  }
+
+  /* ===== Avatar Styles ===== */
+  .avatar {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border: 2px solid rgba(255, 255, 255, 0.8);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .avatar:hover {
+    border-color: var(--primary-color);
+    transform: scale(1.05);
+  }
+
+  /* ===== QR Code Styles ===== */
+  .qr-container {
+    position: relative;
+    display: inline-block;
+  }
+
+  .qr-image {
+    width: 50px;
+    height: 50px;
+    border-radius: 8px;
+    border: 2px solid rgba(255, 255, 255, 0.8);
+    cursor: pointer;
+    transition: var(--transition-smooth);
+    object-fit: contain;
+    background-color: white;
+    padding: 3px;
+  }
+
+  .qr-image:hover {
+    transform: scale(1.1);
+    border-color: var(--primary-color);
+    box-shadow: var(--shadow-medium);
+  }
+
+  .qr-container-mobile {
+    display: inline-block;
   }
 
   .qr-image-mobile {
-    width: 60px;
-    height: 60px;
+    width: 80px;
+    height: 80px;
+    border-radius: 12px;
+    border: 2px solid rgba(255, 255, 255, 0.8);
+    cursor: pointer;
+    transition: var(--transition-smooth);
+    object-fit: contain;
+    background-color: white;
+    padding: 8px;
   }
-}
+
+  .qr-image-mobile:hover {
+    transform: scale(1.05);
+    border-color: var(--primary-color);
+    box-shadow: var(--shadow-medium);
+  }
+
+  /* ===== Modal Styles ===== */
+  .modal-content {
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    border-color: var(--border-color);
+    border-radius: 16px;
+    border: none;
+    box-shadow: var(--shadow-strong);
+  }
+
+  .modal-header {
+    border-bottom-color: var(--border-color);
+    border-radius: 16px 16px 0 0;
+  }
+
+  #qrModalImage {
+    max-width: 300px;
+    max-height: 300px;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.8);
+    background-color: white;
+    padding: 16px;
+  }
+
+  /* ===== Dark Mode Specific ===== */
+  [data-theme="dark"] .stat-card {
+    background: linear-gradient(
+      135deg,
+      rgba(30, 41, 59, 0.9) 0%,
+      rgba(30, 41, 59, 0.7) 100%
+    );
+    border-color: rgba(71, 85, 105, 0.3);
+  }
+
+  /* ===== Responsive Design ===== */
+  @media (max-width: 768px) {
+    .stat-card .card-body {
+      padding: 1.5rem 1rem;
+    }
+
+    .display-6 {
+      font-size: 2rem;
+    }
+
+    .btn {
+      width: 100%;
+    }
+  }
+
+  @media (max-width: 576px) {
+    .avatar {
+      width: 32px;
+      height: 32px;
+    }
+
+    .stat-icon {
+      width: 48px;
+      height: 48px;
+      font-size: 1.25rem;
+    }
+
+    .qr-image-mobile {
+      width: 60px;
+      height: 60px;
+    }
+  }
 </style>
 
 <script>
-// Función de cambio de tema
-function toggleTheme() {
-  const html = document.documentElement;
-  const currentTheme = html.getAttribute('data-theme') || 'light';
-  const newTheme = currentTheme === 'light' ? 'dark' : 'light';
-  html.setAttribute('data-theme', newTheme);
-  localStorage.setItem('theme', newTheme);
+  // Función de cambio de tema
+  function toggleTheme() {
+    const html = document.documentElement;
+    const currentTheme = html.getAttribute("data-theme") || "light";
+    const newTheme = currentTheme === "light" ? "dark" : "light";
+    html.setAttribute("data-theme", newTheme);
+    localStorage.setItem("theme", newTheme);
 
-  // Actualizar ícono del botón
-  const themeIcon = document.getElementById('theme-icon');
-  if (themeIcon) {
-    themeIcon.className = newTheme === 'dark' ? 'bi bi-sun' : 'bi bi-moon';
-  }
-}
-
-// Inicializar tema al cargar la página
-document.addEventListener('DOMContentLoaded', function() {
-  // Configurar tema guardado
-  const savedTheme = localStorage.getItem('theme') || 'light';
-  document.documentElement.setAttribute('data-theme', savedTheme);
-
-  // Actualizar ícono inicial
-  const themeIcon = document.getElementById('theme-icon');
-  if (themeIcon) {
-    themeIcon.className = savedTheme === 'dark' ? 'bi bi-sun' : 'bi bi-moon';
+    // Actualizar ícono del botón
+    const themeIcon = document.getElementById("theme-icon");
+    if (themeIcon) {
+      themeIcon.className = newTheme === "dark" ? "bi bi-sun" : "bi bi-moon";
+    }
   }
 
-  // Modal QR functionality
-  let currentQRSrc = '';
-  let currentQRTitle = '';
+  // Inicializar tema al cargar la página
+  document.addEventListener("DOMContentLoaded", function () {
+    // Configurar tema guardado
+    const savedTheme = localStorage.getItem("theme") || "light";
+    document.documentElement.setAttribute("data-theme", savedTheme);
 
-  window.openQRModal = function(src, title) {
-    currentQRSrc = src;
-    currentQRTitle = title;
+    // Actualizar ícono inicial
+    const themeIcon = document.getElementById("theme-icon");
+    if (themeIcon) {
+      themeIcon.className = savedTheme === "dark" ? "bi bi-sun" : "bi bi-moon";
+    }
 
-    // Crear modal dinámicamente si no existe
-    if (!document.getElementById('qrModal')) {
-      const modalHTML = `
+    // Modal QR functionality
+    let currentQRSrc = "";
+    let currentQRTitle = "";
+
+    window.openQRModal = function (src, title) {
+      currentQRSrc = src;
+      currentQRTitle = title;
+
+      // Crear modal dinámicamente si no existe
+      if (!document.getElementById("qrModal")) {
+        const modalHTML = `
         <div class="modal fade" id="qrModal" tabindex="-1">
           <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
@@ -638,28 +709,30 @@ document.addEventListener('DOMContentLoaded', function() {
           </div>
         </div>
       `;
-      document.body.insertAdjacentHTML('beforeend', modalHTML);
-    }
+        document.body.insertAdjacentHTML("beforeend", modalHTML);
+      }
 
-    document.getElementById('qrModalImage').src = src;
-    document.getElementById('qrModalTitle').textContent = `Código QR para: ${title}`;
+      document.getElementById("qrModalImage").src = src;
+      document.getElementById(
+        "qrModalTitle"
+      ).textContent = `Código QR para: ${title}`;
 
-    const qrModal = new bootstrap.Modal(document.getElementById('qrModal'));
-    qrModal.show();
-  };
+      const qrModal = new bootstrap.Modal(document.getElementById("qrModal"));
+      qrModal.show();
+    };
 
-  window.downloadQR = function() {
-    const link = document.createElement('a');
-    link.href = currentQRSrc;
-    link.download = `QR_${currentQRTitle.replace(/\s+/g, '_')}.png`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
+    window.downloadQR = function () {
+      const link = document.createElement("a");
+      link.href = currentQRSrc;
+      link.download = `QR_${currentQRTitle.replace(/\s+/g, "_")}.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    };
 
-  window.printQR = function() {
-    const printWindow = window.open('', '_blank');
-    printWindow.document.write(`
+    window.printQR = function () {
+      const printWindow = window.open("", "_blank");
+      printWindow.document.write(`
       <html>
         <head>
           <title>Código QR - ${currentQRTitle}</title>
@@ -694,41 +767,40 @@ document.addEventListener('DOMContentLoaded', function() {
         </body>
       </html>
     `);
-    printWindow.document.close();
-    printWindow.print();
-  };
+      printWindow.document.close();
+      printWindow.print();
+    };
 
-  // Efectos hover mejorados para tarjetas
-  const cards = document.querySelectorAll('.card');
-  cards.forEach(card => {
-    card.addEventListener('mouseenter', function() {
-      if (!this.classList.contains('hover-lift')) {
-        this.style.transform = 'translateY(-4px)';
-      }
+    // Efectos hover mejorados para tarjetas
+    const cards = document.querySelectorAll(".card");
+    cards.forEach((card) => {
+      card.addEventListener("mouseenter", function () {
+        if (!this.classList.contains("hover-lift")) {
+          this.style.transform = "translateY(-4px)";
+        }
+      });
+
+      card.addEventListener("mouseleave", function () {
+        if (!this.classList.contains("hover-lift")) {
+          this.style.transform = "translateY(0)";
+        }
+      });
     });
 
-    card.addEventListener('mouseleave', function() {
-      if (!this.classList.contains('hover-lift')) {
-        this.style.transform = 'translateY(0)';
-      }
+    // Scroll suave para mejor UX
+    document.querySelectorAll('a[href^="#"]').forEach((anchor) => {
+      anchor.addEventListener("click", function (e) {
+        e.preventDefault();
+        const target = document.querySelector(this.getAttribute("href"));
+        if (target) {
+          target.scrollIntoView({
+            behavior: "smooth",
+            block: "start",
+          });
+        }
+      });
     });
   });
-
-  // Scroll suave para mejor UX
-  document.querySelectorAll('a[href^="#"]').forEach(anchor => {
-    anchor.addEventListener('click', function (e) {
-      e.preventDefault();
-      const target = document.querySelector(this.getAttribute('href'));
-      if (target) {
-        target.scrollIntoView({
-          behavior: 'smooth',
-          block: 'start'
-        });
-      }
-    });
-  });
-});
 </script>
-
 
 {% endblock %}
