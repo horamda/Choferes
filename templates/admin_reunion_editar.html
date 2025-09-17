@@ -242,13 +242,77 @@
   }
 }
 
+/* ===== Map Legend ===== */
+.map-legend {
+  background: rgba(248, 249, 250, 0.9);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 8px;
+  padding: 10px 15px;
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+
 /* ===== Map Status ===== */
 .map-status {
-  background: rgba(248, 249, 250, 0.8);
-  backdrop-filter: blur(5px);
-  border: 1px solid rgba(0, 0, 0, 0.05);
-  border-radius: 6px;
-  padding: 8px 12px;
+  background: rgba(248, 249, 250, 0.95);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 8px;
+  padding: 10px 15px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* ===== Enhanced Map Container ===== */
+#map-container {
+  position: relative;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  background: #f8f9fa;
+}
+
+#map {
+  border-radius: 12px;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* ===== Map Controls Enhancement ===== */
+.map-controls .btn {
+  border-radius: 8px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(0, 123, 255, 0.2);
+}
+
+.map-controls .btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  border-color: rgba(0, 123, 255, 0.4);
+}
+
+.map-controls .btn:active {
+  transform: translateY(0);
+}
+
+/* ===== Loading Animation Enhancement ===== */
+.map-loading {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  border-radius: 12px;
+}
+
+/* ===== Fullscreen Styles ===== */
+#map-container:fullscreen {
+  border-radius: 0;
+  box-shadow: none;
+}
+
+#map-container:fullscreen #map {
+  border-radius: 0;
 }
 
 /* ===== Enhanced Map Controls ===== */
@@ -410,6 +474,95 @@
 #themeMapBtn[data-theme="light"] .bi-moon::before {
   content: "\f186"; /* moon icon */
 }
+
+#themeMapBtn[data-theme="satellite"] .bi-moon::before {
+  content: "\f5ba"; /* globe icon */
+}
+
+/* ===== High DPI / Retina Display Support ===== */
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+  .leaflet-container {
+    font-size: 16px !important;
+  }
+
+  .leaflet-control-zoom a {
+    background-size: 22px 22px !important;
+  }
+
+  .leaflet-control-attribution {
+    font-size: 11px !important;
+  }
+}
+
+/* ===== Enhanced Map Quality ===== */
+.leaflet-container {
+  font-family: inherit;
+  height: 400px !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  border-radius: 12px;
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: crisp-edges;
+  -ms-interpolation-mode: nearest-neighbor;
+  image-rendering: pixelated;
+  image-rendering: -moz-crisp-edges;
+}
+
+/* Mejorar calidad de tiles */
+.leaflet-tile {
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: crisp-edges;
+  -ms-interpolation-mode: nearest-neighbor;
+  image-rendering: -moz-crisp-edges;
+  will-change: transform;
+}
+
+/* Mejorar calidad de marcadores */
+.leaflet-marker-icon {
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: crisp-edges;
+  -ms-interpolation-mode: nearest-neighbor;
+  image-rendering: -moz-crisp-edges;
+}
+
+/* Mejorar calidad de popups */
+.leaflet-popup-content-wrapper {
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+}
+
+.leaflet-popup-tip {
+  background: white;
+}
+
+/* ===== Performance Optimizations ===== */
+.leaflet-tile-container img {
+  will-change: auto;
+}
+
+.leaflet-zoom-anim .leaflet-zoom-animated {
+  will-change: transform;
+}
+
+/* ===== Better Mobile Experience ===== */
+@media (max-width: 768px) {
+  .leaflet-touch .leaflet-control-layers,
+  .leaflet-touch .leaflet-bar {
+    border-radius: 6px;
+  }
+
+  .leaflet-touch .leaflet-control-zoom a {
+    width: 32px !important;
+    height: 32px !important;
+    line-height: 30px !important;
+    font-size: 18px !important;
+  }
+
+  .leaflet-control-attribution {
+    font-size: 9px !important;
+    bottom: 2px !important;
+  }
+}
 </style>
 {% endblock %}
 
@@ -556,28 +709,50 @@
                     </div>
                     
                     <div class="map-section">
-                        <div class="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-3 mb-3">
-                            <h3 class="mb-0 d-flex align-items-center">
-                                <i class="bi bi-geo-alt-fill text-primary me-2"></i>
-                                Ubicación en Mapa
-                            </h3>
-                            <div class="map-controls d-flex flex-wrap gap-2">
-                                <button type="button" class="btn btn-sm btn-outline-primary d-flex align-items-center gap-2" onclick="getCurrentLocation()" id="locationBtn">
-                                    <i class="bi bi-geo-alt"></i>
-                                    <span class="d-none d-md-inline">Mi ubicación</span>
-                                </button>
-                                <button type="button" class="btn btn-sm btn-outline-secondary d-flex align-items-center gap-2" onclick="centerMap()">
-                                    <i class="bi bi-zoom-in"></i>
-                                    <span class="d-none d-md-inline">Centrar</span>
-                                </button>
-                                <button type="button" class="btn btn-sm btn-outline-info d-flex align-items-center gap-2" onclick="toggleMapTheme()" id="themeMapBtn">
-                                    <i class="bi bi-moon"></i>
-                                    <span class="d-none d-md-inline">Tema</span>
-                                </button>
-                                <button type="button" class="btn btn-sm btn-outline-secondary d-flex align-items-center gap-2" onclick="fullscreenMap()">
-                                    <i class="bi bi-arrows-fullscreen"></i>
-                                    <span class="d-none d-md-inline">Pantalla completa</span>
-                                </button>
+                        <div class="d-flex flex-column gap-3 mb-3">
+                            <div class="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-2">
+                                <h3 class="mb-0 d-flex align-items-center">
+                                    <i class="bi bi-geo-alt-fill text-primary me-2"></i>
+                                    Ubicación en Mapa
+                                </h3>
+                                <div class="map-controls d-flex flex-wrap gap-2">
+                                    <button type="button" class="btn btn-sm btn-outline-primary d-flex align-items-center gap-1" onclick="getCurrentLocation()" id="locationBtn" title="Obtener mi ubicación actual">
+                                        <i class="bi bi-geo-alt"></i>
+                                        <span class="d-none d-lg-inline">Mi ubicación</span>
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary d-flex align-items-center gap-1" onclick="centerMap()" title="Centrar mapa en coordenadas">
+                                        <i class="bi bi-bullseye"></i>
+                                        <span class="d-none d-lg-inline">Centrar</span>
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-outline-info d-flex align-items-center gap-1" onclick="toggleMapTheme()" id="themeMapBtn" data-theme="light" title="Cambiar tema del mapa">
+                                        <i class="bi bi-moon"></i>
+                                        <span class="d-none d-lg-inline">Tema</span>
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-outline-warning d-flex align-items-center gap-1" onclick="resetMapView()" title="Vista inicial del mapa">
+                                        <i class="bi bi-house"></i>
+                                        <span class="d-none d-lg-inline">Inicio</span>
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary d-flex align-items-center gap-1" onclick="fullscreenMap()" title="Pantalla completa">
+                                        <i class="bi bi-arrows-fullscreen"></i>
+                                        <span class="d-none d-lg-inline">Pantalla completa</span>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Map Legend / Info -->
+                            <div class="map-legend d-flex flex-wrap gap-3 text-muted small">
+                                <div class="d-flex align-items-center gap-1">
+                                    <i class="bi bi-mouse text-primary"></i>
+                                    <span>Click para mover marcador</span>
+                                </div>
+                                <div class="d-flex align-items-center gap-1">
+                                    <i class="bi bi-arrows-move text-success"></i>
+                                    <span>Arrastra para navegar</span>
+                                </div>
+                                <div class="d-flex align-items-center gap-1">
+                                    <i class="bi bi-zoom-in text-info"></i>
+                                    <span>Rueda para zoom</span>
+                                </div>
                             </div>
                         </div>
 
@@ -662,11 +837,48 @@ const mapConfig = {
     minZoom: 3
 };
 
-// URLs de tiles para diferentes temas
+// URLs de tiles para diferentes temas con máxima calidad y soporte retina
 const tileLayers = {
-    light: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-    dark: 'https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png',
-    satellite: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
+    light: {
+        url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}{r}.png',
+        options: {
+            attribution: '© OpenStreetMap contributors',
+            maxZoom: 20,
+            maxNativeZoom: 19,
+            tileSize: 256,
+            zoomOffset: 0,
+            detectRetina: true,
+            updateWhenIdle: false,
+            updateWhenZooming: false,
+            keepBuffer: 4
+        }
+    },
+    dark: {
+        url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+        options: {
+            attribution: '© CARTO © OpenStreetMap contributors',
+            maxZoom: 20,
+            maxNativeZoom: 18,
+            tileSize: 256,
+            detectRetina: true,
+            updateWhenIdle: false,
+            updateWhenZooming: false,
+            keepBuffer: 4
+        }
+    },
+    satellite: {
+        url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+        options: {
+            attribution: '© Esri © ArcGIS',
+            maxZoom: 20,
+            maxNativeZoom: 19,
+            tileSize: 256,
+            detectRetina: false,
+            updateWhenIdle: false,
+            updateWhenZooming: false,
+            keepBuffer: 4
+        }
+    }
 };
 
 // Inicializar mapa con enfoque más simple
@@ -702,7 +914,7 @@ function initMap() {
         // Limpiar HTML del contenedor
         mapContainer.innerHTML = '';
         
-        // Crear mapa con configuración básica
+        // Crear mapa con configuración ultra-optimizada para máxima calidad
         map = L.map('map', {
             center: [lat, lng],
             zoom: mapConfig.defaultZoom,
@@ -712,21 +924,56 @@ function initMap() {
             keyboard: true,
             dragging: true,
             zoomControl: true,
-            attributionControl: true
+            attributionControl: true,
+            fadeAnimation: true,
+            zoomAnimation: true,
+            markerZoomAnimation: true,
+            inertia: true,
+            inertiaDeceleration: 3000,
+            inertiaMaxSpeed: 1500,
+            easeLinearity: 0.25,
+            worldCopyJump: false,
+            maxBoundsViscosity: 1.0,
+            preferCanvas: false, // Usar SVG para mejor calidad
+            renderer: L.svg({ padding: 0.5 }), // Mejor renderizado
+            zoomSnap: 1,
+            zoomDelta: 1,
+            wheelPxPerZoomLevel: 60,
+            wheelDebounceTime: 40,
+            tapTolerance: 15
         });
-        
+
         console.log('Mapa creado exitosamente');
-        
-        // Agregar capa de tiles
-        const tileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© OpenStreetMap',
-            maxZoom: 18,
-            tileSize: 256,
-            zoomOffset: 0
+
+        // Agregar capa de tiles con configuración ultra-optimizada
+        const tileConfig = tileLayers[currentMapTheme];
+        const tileLayer = L.tileLayer(tileConfig.url, {
+            ...tileConfig.options,
+            // Configuraciones adicionales para máxima calidad
+            crossOrigin: true,
+            errorTileUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+            updateInterval: 200,
+            keepBuffer: 8,
+            maxZoom: Math.max(tileConfig.options.maxZoom, 20),
+            minZoom: 0
         });
-        
+
         tileLayer.addTo(map);
-        console.log('Tiles agregados');
+        console.log('Tiles de ultra-alta calidad agregados');
+
+        // Optimizar carga de tiles
+        tileLayer.on('load', function() {
+            console.log('Todos los tiles cargados correctamente');
+        });
+
+        tileLayer.on('tileload', function() {
+            // Pequeño delay para asegurar renderizado perfecto
+            setTimeout(() => {
+                if (map) {
+                    map.invalidateSize();
+                }
+            }, 50);
+        });
         
         // Crear marcador
         marker = L.marker([lat, lng], {
@@ -897,22 +1144,27 @@ function toggleMapTheme() {
     const themeBtn = document.getElementById('themeMapBtn');
     const icon = themeBtn.querySelector('i');
 
-    // Cambiar tema
-    currentMapTheme = currentMapTheme === 'light' ? 'dark' : 'light';
+    // Cambiar tema cíclicamente: light -> dark -> satellite -> light
+    const themes = ['light', 'dark', 'satellite'];
+    const currentIndex = themes.indexOf(currentMapTheme);
+    currentMapTheme = themes[(currentIndex + 1) % themes.length];
 
-    // Actualizar icono
-    if (currentMapTheme === 'dark') {
-        icon.className = 'bi bi-sun';
-        themeBtn.setAttribute('data-theme', 'dark');
-    } else {
-        icon.className = 'bi bi-moon';
-        themeBtn.setAttribute('data-theme', 'light');
-    }
+    // Actualizar icono y tooltip
+    const themeIcons = {
+        light: 'bi-sun',
+        dark: 'bi-moon',
+        satellite: 'bi-globe'
+    };
 
-    // Cambiar capa de tiles
-    const tileUrl = tileLayers[currentMapTheme];
-    const attribution = currentMapTheme === 'satellite' ?
-        '© Esri' : '© OpenStreetMap contributors';
+    const themeNames = {
+        light: 'Tema Claro',
+        dark: 'Tema Oscuro',
+        satellite: 'Satélite'
+    };
+
+    icon.className = `bi ${themeIcons[currentMapTheme]}`;
+    themeBtn.setAttribute('data-theme', currentMapTheme);
+    themeBtn.setAttribute('title', themeNames[currentMapTheme]);
 
     // Remover capa actual
     map.eachLayer(function(layer) {
@@ -921,19 +1173,40 @@ function toggleMapTheme() {
         }
     });
 
-    // Agregar nueva capa
-    const newTileLayer = L.tileLayer(tileUrl, {
-        attribution: attribution,
-        maxZoom: 18
-    }).addTo(map);
+    // Agregar nueva capa con configuración optimizada
+    const tileConfig = tileLayers[currentMapTheme];
+    const newTileLayer = L.tileLayer(tileConfig.url, tileConfig.options).addTo(map);
 
-    showNotification(`Tema del mapa cambiado a ${currentMapTheme === 'light' ? 'claro' : 'oscuro'}`, 'success');
+    // Pequeño delay para asegurar que los tiles se carguen correctamente
+    setTimeout(() => {
+        map.invalidateSize();
+    }, 100);
+
+    showNotification(`Tema del mapa: ${themeNames[currentMapTheme]}`, 'success');
+}
+
+// Reset map view to initial coordinates
+function resetMapView() {
+    if (!isMapInitialized || !map) {
+        showNotification('Mapa no inicializado', 'warning');
+        return;
+    }
+
+    const lat = parseFloat(document.getElementById('latitud').value) || mapConfig.defaultLat;
+    const lng = parseFloat(document.getElementById('longitud').value) || mapConfig.defaultLng;
+
+    map.setView([lat, lng], mapConfig.defaultZoom);
+    marker.setLatLng([lat, lng]);
+    updateCoordinatesDisplay(lat, lng);
+    updateZoomDisplay(mapConfig.defaultZoom);
+
+    showNotification('Vista del mapa restablecida', 'info');
 }
 
 // Pantalla completa del mapa
 function fullscreenMap() {
     const mapContainer = document.getElementById('map-container');
-    
+
     if (!document.fullscreenElement) {
         mapContainer.requestFullscreen().then(() => {
             setTimeout(() => {
@@ -941,11 +1214,18 @@ function fullscreenMap() {
                     map.invalidateSize();
                 }
             }, 300);
+            showNotification('Modo pantalla completa activado', 'success');
         }).catch(() => {
-            console.log('Pantalla completa no soportada');
+            showNotification('Pantalla completa no soportada en este navegador', 'warning');
         });
     } else {
         document.exitFullscreen();
+        setTimeout(() => {
+            if (map) {
+                map.invalidateSize();
+            }
+        }, 300);
+        showNotification('Modo pantalla completa desactivado', 'info');
     }
 }
 
