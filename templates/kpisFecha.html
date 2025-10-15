@@ -3,21 +3,116 @@
 {% block header %}📈 KPIs de Empleado por DNI y fecha{% endblock %}
 
 {% block content %}
+<style>
+/* === Dark Dashboard Theme for KPIs === */
+:root{
+  --bg: #0f172a;           /* slate-900 */
+  --panel: #111827;        /* gray-900 */
+  --text: #e5e7eb;         /* gray-200 */
+  --muted: #94a3b8;        /* slate-400 */
+  --brand: #38bdf8;        /* sky-400 */
+  --ok: #16a34a;           /* green-600 */
+  --warn: #eab308;         /* yellow-500 */
+  --bad: #dc2626;          /* red-600 */
+}
+
+body{
+  background: var(--bg);
+  color: var(--text);
+}
+
+.card{
+  background: var(--panel);
+  border: 1px solid rgba(255,255,255,0.06);
+}
+
+#infoEmpleado{
+  background: #1e293b; /* slate-800 */
+  padding: 1rem 1.5rem;
+  border-radius: 12px;
+  color: var(--text);
+  box-shadow: 0 2px 5px rgba(0,0,0,0.25);
+}
+
+#fotoEmpleado{
+  width: 70px;
+  height: 70px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid var(--brand);
+}
+
+#nombreEmpleado{
+  font-weight: 700;
+  font-size: 1.2rem;
+}
+
+#sectorEmpleado{
+  text-transform: capitalize;
+  font-size: .9rem;
+  color: var(--muted);
+}
+
+/* KPI Cards */
+.kpi-card{
+  border-radius: 14px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+  color: #fff;
+  padding: 1rem 1.2rem;
+  transition: transform .2s, box-shadow .2s;
+  cursor: default;
+  height: 100%;
+}
+.kpi-card:hover{
+  transform: translateY(-3px);
+  box-shadow: 0 4px 10px rgba(0,0,0,0.4);
+}
+.kpi-title{
+  font-size: 0.8rem;
+  font-weight: 600;
+  opacity: 0.9;
+  text-transform: uppercase;
+}
+.kpi-value{
+  font-size: 2rem;
+  font-weight: 700;
+  line-height: 1.2;
+  margin: .2rem 0 .4rem;
+}
+.kpi-footer{
+  font-size: .85rem;
+  opacity: .95;
+  display: flex;
+  justify-content: space-between;
+}
+.badge{
+  font-size: .7rem;
+}
+
+  .chart-container {
+    border-radius: 10px;
+    overflow: hidden;
+  }
+</style>
 <!-- ====== Filtros ====== -->
-<div class="row g-3 mb-4">
-  <div class="col-md-3">
-    <label class="form-label">Desde</label>
-    <input type="date" id="fromInput" class="form-control">
-  </div>
-  <div class="col-md-3">
-    <label class="form-label">Hasta</label>
-    <input type="date" id="toInput" class="form-control">
-  </div>
-  <div class="col-md-4 d-flex align-items-end">
-    <div class="input-group">
-      <input type="text" id="dniInput" class="form-control" placeholder="DNI del empleado"
-             onkeydown="if(event.key==='Enter') buscarKPIs()">
-      <button class="btn btn-primary" onclick="buscarKPIs()">Buscar</button>
+<div class="card mb-4">
+  <div class="card-body">
+    <div class="row g-3">
+      <div class="col-md-3">
+        <label class="form-label fw-bold">Desde</label>
+        <input type="date" id="fromInput" class="form-control">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label fw-bold">Hasta</label>
+        <input type="date" id="toInput" class="form-control">
+      </div>
+      <div class="col-md-4 d-flex align-items-end">
+        <div class="input-group">
+          <input type="text" id="dniInput" class="form-control" placeholder="DNI del empleado"
+                 onkeydown="if(event.key==='Enter') buscarKPIs()">
+          <button class="btn btn-primary" onclick="buscarKPIs()">Buscar</button>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -28,6 +123,13 @@
   <div>
     <h5 id="nombreEmpleado" class="m-0"></h5>
     <small id="sectorEmpleado" class="text-muted"></small>
+  </div>
+</div>
+
+<!-- Loading spinner -->
+<div id="loading" class="text-center my-4" style="display:none;">
+  <div class="spinner-border text-primary" role="status">
+    <span class="visually-hidden">Cargando...</span>
   </div>
 </div>
 
@@ -42,6 +144,15 @@
   const charts = [];
   const slug = s => s.replace(/[^a-zA-Z0-9]/g, '_');
   const api  = path => `${window.location.origin}${path}`;
+
+  /* Set default dates to current month */
+  document.addEventListener('DOMContentLoaded', function() {
+    const hoy = new Date();
+    const primerDia = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+    const ultimoDia = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0);
+    document.getElementById('fromInput').value = primerDia.toISOString().split('T')[0];
+    document.getElementById('toInput').value = ultimoDia.toISOString().split('T')[0];
+  });
 
   async function buscarKPIs() {
     const dni  = document.getElementById('dniInput').value.trim();
@@ -64,6 +175,9 @@
     tCont.innerHTML = ''; gCont.innerHTML = '';
     charts.forEach(c => c.destroy()); charts.length = 0;
 
+    /* Mostrar loading */
+    document.getElementById('loading').style.display = 'block';
+
     /* Query-string */
     let qs = '';
     if (from) qs += (qs ? '&' : '?') + 'from=' + from;
@@ -71,8 +185,15 @@
 
     /* ===== 1) Resumen KPIs ===== */
     const res = await fetch(api(`/api/empleados/${dni}/kpis/resumen`) + qs);
-    if (!res.ok) { alert('No se encontró el DNI o ocurrió un error'); return; }
-    const { empleado = {}, kpis = [] } = await res.json();
+    if (!res.ok) {
+      document.getElementById('loading').style.display = 'none';
+      alert('Error: ' + res.status + ' - ' + res.statusText);
+      return;
+    }
+    const { empleado = {}, cards = [] } = await res.json();
+
+    /* Ocultar loading */
+    document.getElementById('loading').style.display = 'none';
 
     /* Mostrar datos del empleado */
     if (Object.keys(empleado).length) {
@@ -87,23 +208,48 @@
     }
 
     /* Si no hay KPIs */
-    if (!kpis.length) {
+    if (!cards.length) {
       tCont.innerHTML =
         '<div class="alert alert-warning w-100 text-center">No se encontraron KPIs.</div>';
       return;
     }
 
     /* Render tarjetas y gráficos */
-    for (const k of kpis) {
+    for (const k of cards) {
       const cid = 'graf_' + slug(k.indicador);
+
+      /* Color coding based on semaforo */
+      let bgColor = k.color_grafico || '#0d6efd';
+      let textColor = 'text-white';
+      if (k.semaforo === 'cumple') bgColor = '#28a745'; // green
+      else if (k.semaforo === 'cerca') { bgColor = '#ffc107'; textColor = 'text-dark'; } // yellow
+      else if (k.semaforo === 'fuera') bgColor = '#dc3545'; // red
+
+      /* Calculate deviation from objective */
+      const desv = k.valor_actual - k.objetivo;
+      const desvPct = k.objetivo !== 0 ? (desv / k.objetivo) * 100 : 0;
+      const desvSign = desv >= 0 ? '+' : '';
+      const desvFormatted = desvSign + desv.toFixed(1);
+      const desvPctFormatted = desvSign + desvPct.toFixed(1) + '%';
+      const objFormatted = k.objetivo.toFixed(1);
+      const valFormatted = typeof k.valor_actual === 'number' ? k.valor_actual.toFixed(1) : k.valor_actual;
+
+      /* Icon based on semaforo */
+      let icon = '';
+      if (k.semaforo === 'cumple') icon = '✅';
+      else if (k.semaforo === 'cerca') icon = '⚠️';
+      else if (k.semaforo === 'fuera') icon = '❌';
 
       /* Tarjeta KPI */
       tCont.insertAdjacentHTML('beforeend', `
         <div class="col-sm-6 col-md-4 col-lg-3">
-          <div class="card text-white" style="background-color:${k.color || '#0d6efd'}">
-            <div class="card-body p-2">
-              <small class="text-uppercase">${k.indicador}</small>
-              <h3 class="m-0">${k.valor}</h3>
+          <div class="kpi-card" style="background: linear-gradient(135deg, ${bgColor} 0%, ${bgColor}dd 100%);">
+            <div class="mb-2">${icon}</div>
+            <div class="kpi-title">${k.indicador}</div>
+            <div class="kpi-value">${valFormatted}</div>
+            <div class="kpi-footer">
+              <span>Desv: ${desvFormatted} (${desvPctFormatted})</span>
+              <span>Obj: ${objFormatted}</span>
             </div>
           </div>
         </div>`);
@@ -111,8 +257,8 @@
       /* Contenedor gráfico */
       gCont.insertAdjacentHTML('beforeend', `
         <div class="col-md-6 mb-4">
-          <div class="card"><div class="card-body">
-            <h6 class="card-title">${k.indicador}</h6>
+          <div class="card chart-container shadow-sm"><div class="card-body">
+            <h6 class="card-title text-center fw-bold">${k.indicador}</h6>
             <canvas id="${cid}"></canvas>
           </div></div>
         </div>`);
@@ -127,18 +273,28 @@
 
       const ctx = document.getElementById(cid).getContext('2d');
       charts.push(new Chart(ctx, {
-        type: serie.tipo || k.tipo || 'bar',
+        type: serie.tipo || k.tipo_grafico || 'bar',
         data: {
           labels: serie.labels,
           datasets: [{
             label: k.indicador,
             data:  serie.data,
-            borderColor: serie.color || k.color || '#0d6efd',
-            backgroundColor: (k.tipo === 'bar')
-                ? (serie.color || k.color)
-                : (serie.color || k.color + '55'),
-            fill: serie.fill ?? k.fill,
+            borderColor: serie.color || k.color_grafico || '#0d6efd',
+            backgroundColor: (k.tipo_grafico === 'bar')
+                ? (serie.color || k.color_grafico)
+                : (serie.color || k.color_grafico + '55'),
+            fill: serie.fill ?? k.fill_grafico,
             tension: 0.3
+          }, {
+            label: 'Objetivo',
+            data: serie.labels.map(() => serie.objetivo),
+            borderColor: '#dc3545',
+            backgroundColor: 'transparent',
+            fill: false,
+            tension: 0,
+            pointRadius: 0,
+            borderWidth: 2,
+            borderDash: [5, 5]
           }]
         },
         options: { responsive:true, scales:{ y:{ beginAtZero:true } } }

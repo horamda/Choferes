@@ -2,19 +2,21 @@
 {% block title %}Nueva Asignación{% endblock %}
 
 {% block content %}
-<div class="container-fluid px-3 px-md-4 py-4">
+<div class="container-fluid px-3 px-md-4 py-4 fade-in">
   <div class="row justify-content-center">
     <div class="col-12 col-md-10 col-lg-8 col-xl-6">
       
       <!-- Header Section -->
-      <div class="d-flex align-items-center mb-4">
-        <div class="bg-primary bg-gradient rounded-circle d-flex align-items-center justify-content-center me-3" 
-             style="width: 48px; height: 48px;">
-          <i class="fas fa-plus text-white fs-5"></i>
-        </div>
-        <div>
-          <h1 class="h3 mb-0 text-primary-emphasis">Nueva Asignación</h1>
-          <p class="text-muted mb-0 small">Asignar chofer a reunión</p>
+      <div class="page-header">
+        <div class="d-flex align-items-center">
+          <div class="bg-primary bg-gradient rounded-circle d-flex align-items-center justify-content-center me-3"
+               style="width: 48px; height: 48px;" aria-hidden="true">
+            <i class="fas fa-plus text-white fs-5"></i>
+          </div>
+          <div>
+            <h1 class="page-title">Nueva Asignación</h1>
+            <p class="text-muted mb-0 small">Asignar chofer a reunión</p>
+          </div>
         </div>
       </div>
 
@@ -89,9 +91,9 @@
             </div>
 
             <!-- Meeting Preview Card -->
-            <div id="meetingPreview" class="alert alert-info d-none mb-4">
+            <div id="meetingPreview" class="preview-card d-none mb-4">
               <div class="d-flex align-items-center">
-                <i class="fas fa-eye me-2"></i>
+                <i class="fas fa-eye me-2" aria-hidden="true"></i>
                 <div>
                   <strong>Vista previa de la reunión:</strong>
                   <div id="previewContent" class="mt-1"></div>
@@ -144,10 +146,10 @@
       </div>
 
       <!-- Help Card -->
-      <div class="card border-0 bg-light-subtle mt-4">
+      <div class="card border-0 help-card mt-4">
         <div class="card-body p-3">
           <div class="d-flex align-items-center text-muted">
-            <i class="fas fa-lightbulb me-2"></i>
+            <i class="fas fa-lightbulb me-2" aria-hidden="true"></i>
             <small>
               <strong>Consejo:</strong> Puedes filtrar los choferes escribiendo en el campo de selección.
             </small>
@@ -184,268 +186,866 @@
 </div>
 
 <style>
-/* Custom CSS for enhanced UX */
+/* ========== ENHANCED THEME SYSTEM ========== */
 :root {
-  --bs-primary-rgb: 13, 110, 253;
-  --bs-success-rgb: 25, 135, 84;
-  --bs-info-rgb: 13, 202, 240;
-  --bs-warning-rgb: 255, 193, 7;
-  --bs-danger-rgb: 220, 53, 69;
-  --bs-light-rgb: 248, 249, 250;
-  --bs-dark-rgb: 33, 37, 41;
+  /* Core Colors - Light Theme */
+  --primary-color: #2563eb;
+  --secondary-color: #64748b;
+  --success-color: #10b981;
+  --warning-color: #f59e0b;
+  --danger-color: #ef4444;
+  --info-color: #06b6d4;
+
+  /* Text Colors - High Contrast */
+  --text-primary: #1e293b;
+  --text-secondary: #64748b;
+  --text-muted: #94a3b8;
+  --text-light: #f1f5f9;
+
+  /* Background Colors */
+  --bg-primary: #ffffff;
+  --bg-secondary: #f8fafc;
+  --bg-tertiary: #f1f5f9;
+  --bg-muted: #e2e8f0;
+
+  /* Border Colors */
+  --border-color: #e2e8f0;
+  --border-light: #f1f5f9;
+
+  /* Shadow System */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+
+  /* Bootstrap Overrides */
+  --bs-primary: var(--primary-color);
+  --bs-secondary: var(--secondary-color);
+  --bs-success: var(--success-color);
+  --bs-warning: var(--warning-color);
+  --bs-danger: var(--danger-color);
+  --bs-info: var(--info-color);
+  --bs-light: var(--bg-tertiary);
+  --bs-dark: var(--text-primary);
 }
 
-/* Dark mode support */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bs-body-bg: #1a1a1a;
-    --bs-body-color: #ffffff;
-    --bs-emphasis-color: #ffffff;
-    --bs-secondary-color: rgba(255, 255, 255, 0.75);
-    --bs-tertiary-color: rgba(255, 255, 255, 0.5);
-    --bs-border-color: #404040;
-    --bs-light-rgb: 52, 58, 64;
-  }
-  
-  .card {
-    background-color: #2d2d2d;
-    border-color: #404040;
-  }
-  
-  .card-header {
-    background-color: #404040 !important;
-    border-color: #404040;
-  }
-  
-  .bg-light-subtle {
-    background-color: #404040 !important;
-  }
-  
-  .form-select, .form-control {
-    background-color: #2d2d2d;
-    border-color: #404040;
-    color: #ffffff;
-  }
-  
-  .form-select:focus, .form-control:focus {
-    background-color: #2d2d2d;
-    border-color: #0d6efd;
-    color: #ffffff;
-  }
-  
-  .text-muted {
-    color: rgba(255, 255, 255, 0.6) !important;
-  }
-  
-  .alert-info {
-    background-color: #1a2332;
-    border-color: #0dcaf0;
-    color: #b3e5fc;
-  }
+[data-theme="dark"] {
+  /* Core Colors - Dark Theme */
+  --primary-color: #60a5fa;
+  --secondary-color: #94a3b8;
+  --success-color: #34d399;
+  --warning-color: #fbbf24;
+  --danger-color: #f87171;
+  --info-color: #22d3ee;
+
+  /* Text Colors - High Contrast Dark */
+  --text-primary: #f1f5f9;
+  --text-secondary: #cbd5e1;
+  --text-muted: #94a3b8;
+  --text-light: #1e293b;
+
+  /* Background Colors - Dark */
+  --bg-primary: #0f172a;
+  --bg-secondary: #1e293b;
+  --bg-tertiary: #334155;
+  --bg-muted: #475569;
+
+  /* Border Colors - Dark */
+  --border-color: #334155;
+  --border-light: #475569;
+
+  /* Shadow System - Dark */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+  --shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.4), 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -2px rgba(0, 0, 0, 0.4);
 }
 
-/* Enhanced form styling */
-.form-select, .form-control {
-  transition: all 0.3s ease;
-  border-radius: 0.5rem;
+/* ========== GLOBAL STYLES ========== */
+body {
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
+  min-height: 100vh;
+  color: var(--text-primary);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow-x: hidden;
 }
 
-.form-select:focus, .form-control:focus {
-  transform: translateY(-2px);
-  box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+.container-fluid {
+  max-width: 1200px;
 }
 
-.btn {
-  transition: all 0.3s ease;
-  border-radius: 0.5rem;
-  font-weight: 500;
+/* ========== HEADER STYLES ========== */
+.page-header {
+  background: var(--bg-primary);
+  border-radius: 16px;
+  padding: 2rem;
+  margin-bottom: 2rem;
+  box-shadow: var(--shadow);
+  border: 1px solid var(--border-color);
 }
 
-.btn:hover {
-  transform: translateY(-2px);
+.page-title {
+  color: var(--text-primary);
+  font-weight: 700;
+  font-size: 2rem;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
 }
 
+.page-title i {
+  color: var(--primary-color);
+  font-size: 2.25rem;
+}
+
+/* ========== CARD COMPONENTS ========== */
 .card {
-  transition: all 0.3s ease;
-  border-radius: 1rem;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  color: var(--text-primary);
+  overflow: hidden;
 }
 
 .card:hover {
   transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
 }
 
-/* Animation for form validation */
-.was-validated .form-select:invalid,
-.was-validated .form-control:invalid {
-  border-color: #dc3545;
-  animation: shake 0.5s ease-in-out;
+.card-header {
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border-color);
+  color: var(--text-primary);
+  padding: 1.5rem;
 }
 
+.card-body {
+  padding: 2rem;
+}
+
+/* ========== FORM COMPONENTS ========== */
+.form-label {
+  color: var(--text-primary);
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.form-select, .form-control {
+  background: var(--bg-primary);
+  border: 2px solid var(--border-color);
+  color: var(--text-primary);
+  border-radius: 12px;
+  padding: 0.75rem 1rem;
+  font-size: 1rem;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  font-weight: 500;
+}
+
+.form-select:focus, .form-control:focus {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.form-select:hover:not(:focus), .form-control:hover:not(:focus) {
+  border-color: var(--text-secondary);
+}
+
+.form-select option {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.form-control::placeholder {
+  color: var(--text-muted);
+}
+
+.form-text {
+  color: var(--text-muted);
+  font-size: 0.875rem;
+  margin-top: 0.25rem;
+}
+
+/* ========== FORM CHECK COMPONENTS ========== */
+.form-check {
+  background: var(--bg-muted);
+  border: 2px solid var(--border-color);
+  border-radius: 12px;
+  padding: 1rem;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  margin-bottom: 1.5rem;
+}
+
+.form-check:hover {
+  border-color: var(--primary-color);
+  background: var(--bg-primary);
+  transform: translateY(-1px);
+}
+
+.form-check-input {
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 6px;
+  border: 2px solid var(--border-color);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  background: var(--bg-primary);
+}
+
+.form-check-input:checked {
+  background: var(--primary-color);
+  border-color: var(--primary-color);
+}
+
+.form-check-input:focus {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.form-check-label {
+  font-weight: 500;
+  color: var(--text-primary);
+  margin-left: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* ========== ALERT COMPONENTS ========== */
+.alert {
+  border-radius: 12px;
+  border: 1px solid transparent;
+  color: var(--text-primary);
+}
+
+.alert-info {
+  background: rgba(6, 182, 212, 0.1);
+  border-color: rgba(6, 182, 212, 0.2);
+  color: var(--info-color);
+}
+
+/* ========== BUTTON COMPONENTS ========== */
+.btn {
+  border-radius: 12px;
+  padding: 0.75rem 1.5rem;
+  font-weight: 600;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  border: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  text-decoration: none;
+  cursor: pointer;
+  user-select: none;
+  min-height: 48px;
+}
+
+.btn:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.btn:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2);
+}
+
+.btn-success {
+  background: linear-gradient(135deg, var(--success-color), #059669);
+  color: white;
+}
+
+.btn-outline-secondary {
+  border: 2px solid var(--border-color);
+  background: transparent;
+  color: var(--text-primary);
+}
+
+.btn-outline-secondary:hover {
+  background: var(--border-color);
+  color: var(--text-primary);
+}
+
+/* ========== TOAST COMPONENTS ========== */
+.toast {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  color: var(--text-primary);
+}
+
+.toast-header {
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border-color);
+  color: var(--text-primary);
+}
+
+/* ========== ANIMATIONS ========== */
 @keyframes shake {
   0%, 100% { transform: translateX(0); }
   25% { transform: translateX(-5px); }
   75% { transform: translateX(5px); }
 }
 
-/* Loading state */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.fade-in {
+  animation: fadeIn 0.6s ease-in-out;
+}
+
+/* ========== VALIDATION STATES ========== */
+.was-validated .form-select:invalid,
+.was-validated .form-control:invalid {
+  border-color: var(--danger-color);
+  animation: shake 0.5s ease-in-out;
+}
+
+.invalid-feedback {
+  color: var(--danger-color);
+  font-size: 0.875rem;
+  margin-top: 0.25rem;
+}
+
+/* ========== LOADING STATES ========== */
 .loading {
   opacity: 0.6;
   pointer-events: none;
+  position: relative;
 }
 
-/* Responsive improvements */
-@media (max-width: 576px) {
+.loading .btn {
+  position: relative;
+}
+
+.loading .btn::after {
+  content: '';
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  margin: auto;
+  border: 2px solid transparent;
+  border-top-color: #ffffff;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* ========== RESPONSIVE DESIGN ========== */
+@media (max-width: 768px) {
   .container-fluid {
-    padding-left: 1rem;
-    padding-right: 1rem;
+    padding: 0 1rem;
   }
-  
+
+  .page-header {
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .page-title {
+    font-size: 1.5rem;
+  }
+
+  .page-title i {
+    font-size: 1.75rem;
+  }
+
   .card-body {
     padding: 1.5rem;
   }
-  
-  .btn-lg {
-    padding: 0.75rem 1.5rem;
+
+  .btn {
+    width: 100%;
+    justify-content: center;
+    min-height: 48px;
+  }
+
+  .d-flex.justify-content-between {
+    flex-direction: column-reverse;
+    gap: 1rem;
+  }
+
+  .form-select, .form-control {
+    font-size: 16px; /* Prevents zoom on iOS */
+    padding: 0.875rem 1rem;
+    min-height: 52px;
+  }
+
+  .form-check {
+    padding: 0.875rem;
   }
 }
 
-/* Custom scrollbar */
+@media (max-width: 576px) {
+  .page-header {
+    padding: 1.25rem;
+  }
+
+  .page-title {
+    font-size: 1.25rem;
+  }
+
+  .card-body {
+    padding: 1.25rem;
+  }
+
+  .btn {
+    padding: 0.625rem 1rem;
+    font-size: 0.875rem;
+    min-height: 44px;
+  }
+}
+
+/* ========== ACCESSIBILITY IMPROVEMENTS ========== */
+.visually-hidden {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+/* Focus indicators */
+.btn:focus,
+.form-select:focus,
+.form-control:focus,
+.form-check-input:focus {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .card:hover,
+  .btn:hover,
+  .form-check:hover {
+    transform: none !important;
+  }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  :root {
+    --text-primary: #000000;
+    --text-secondary: #000000;
+    --bg-primary: #ffffff;
+    --bg-secondary: #ffffff;
+    --border-color: #000000;
+  }
+
+  [data-theme="dark"] {
+    --text-primary: #ffffff;
+    --text-secondary: #ffffff;
+    --bg-primary: #000000;
+    --bg-secondary: #000000;
+    --border-color: #ffffff;
+  }
+
+  .card, .btn, .form-control, .form-select, .form-check {
+    border: 2px solid var(--border-color) !important;
+  }
+
+  .text-primary {
+    color: var(--text-primary) !important;
+  }
+
+  .text-secondary {
+    color: var(--text-secondary) !important;
+  }
+
+  .text-muted {
+    color: var(--text-secondary) !important;
+  }
+}
+
+/* ========== PRINT STYLES ========== */
+@media print {
+  .btn {
+    border: 1px solid #000000 !important;
+  }
+
+  .card {
+    box-shadow: none !important;
+    border: 1px solid #000000 !important;
+  }
+
+  body {
+    background: white !important;
+    color: black !important;
+  }
+}
+
+/* ========== CUSTOM SCROLLBAR ========== */
 ::-webkit-scrollbar {
   width: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #f1f1f1;
+  background: var(--bg-muted);
+  border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #c1c1c1;
+  background: var(--border-color);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #a8a8a8;
+  background: var(--text-secondary);
 }
 
-@media (prefers-color-scheme: dark) {
-  ::-webkit-scrollbar-track {
-    background: #2d2d2d;
-  }
-  
-  ::-webkit-scrollbar-thumb {
-    background: #555;
-  }
-  
-  ::-webkit-scrollbar-thumb:hover {
-    background: #777;
-  }
+/* ========== ENHANCED HELP CARD ========== */
+.help-card {
+  background: var(--bg-muted);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  color: var(--text-secondary);
+}
+
+/* ========== PREVIEW CARD ========== */
+.preview-card {
+  background: var(--bg-muted);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 1rem;
+  margin-top: 1rem;
 }
 </style>
 
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-  const form = document.getElementById('assignmentForm');
-  const submitBtn = document.getElementById('submitBtn');
-  const submitText = document.getElementById('submitText');
-  const submitSpinner = document.getElementById('submitSpinner');
-  const reunionSelect = document.getElementById('reunion_id');
-  const meetingPreview = document.getElementById('meetingPreview');
-  const previewContent = document.getElementById('previewContent');
-  
-  // Form validation
-  form.addEventListener('submit', function(e) {
-    e.preventDefault();
-    
-    if (form.checkValidity()) {
-      // Show loading state
-      submitBtn.disabled = true;
-      submitText.textContent = 'Guardando...';
-      submitSpinner.classList.remove('d-none');
-      
-      // Simulate form submission (replace with actual form submission)
-      setTimeout(() => {
-        form.submit();
-      }, 500);
-    } else {
-      form.classList.add('was-validated');
-      
-      // Show error toast
-      const errorToast = new bootstrap.Toast(document.getElementById('errorToast'));
-      errorToast.show();
+// ========== ENHANCED THEME MANAGEMENT ==========
+class ThemeManager {
+  constructor() {
+    this.storageKey = "asignaciones-nuevo-theme";
+    this.mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    this.init();
+  }
+
+  init() {
+    const savedTheme = this.getSavedTheme();
+    const systemTheme = this.getSystemTheme();
+    const theme = savedTheme || systemTheme;
+
+    this.setTheme(theme);
+    this.setupSystemThemeListener();
+  }
+
+  getSavedTheme() {
+    try {
+      return localStorage.getItem(this.storageKey);
+    } catch (e) {
+      console.warn("LocalStorage no disponible");
+      return null;
     }
-  });
-  
-  // Meeting preview
-  reunionSelect.addEventListener('change', function() {
-    const selectedOption = this.options[this.selectedIndex];
-    
+  }
+
+  getSystemTheme() {
+    return this.mediaQuery.matches ? "dark" : "light";
+  }
+
+  setTheme(theme) {
+    document.documentElement.setAttribute("data-theme", theme);
+    try {
+      localStorage.setItem(this.storageKey, theme);
+    } catch (e) {
+      console.warn("No se pudo guardar la preferencia de tema");
+    }
+  }
+
+  setupSystemThemeListener() {
+    this.mediaQuery.addEventListener("change", (e) => {
+      if (!this.getSavedTheme()) {
+        const newTheme = e.matches ? "dark" : "light";
+        this.setTheme(newTheme);
+      }
+    });
+  }
+}
+
+// ========== FORM MANAGEMENT ==========
+class FormManager {
+  constructor() {
+    this.form = document.getElementById('assignmentForm');
+    this.submitBtn = document.getElementById('submitBtn');
+    this.submitText = document.getElementById('submitText');
+    this.submitSpinner = document.getElementById('submitSpinner');
+    this.reunionSelect = document.getElementById('reunion_id');
+    this.dniSelect = document.getElementById('dni');
+    this.meetingPreview = document.getElementById('meetingPreview');
+    this.previewContent = document.getElementById('previewContent');
+    this.init();
+  }
+
+  init() {
+    if (this.form) {
+      this.setupValidation();
+      this.setupSubmission();
+      this.setupMeetingPreview();
+      this.setupFieldEffects();
+      this.setupKeyboardShortcuts();
+    }
+  }
+
+  setupValidation() {
+    // Real-time validation
+    [this.dniSelect, this.reunionSelect].forEach(field => {
+      if (field) {
+        field.addEventListener('change', () => this.validateField(field));
+        field.addEventListener('blur', () => this.validateField(field));
+      }
+    });
+  }
+
+  validateField(field) {
+    const isValid = field.value.trim() !== '';
+    field.classList.toggle('is-valid', isValid);
+    field.classList.toggle('is-invalid', !isValid);
+    return isValid;
+  }
+
+  validateForm() {
+    const dniValid = this.dniSelect ? this.validateField(this.dniSelect) : true;
+    const reunionValid = this.reunionSelect ? this.validateField(this.reunionSelect) : true;
+
+    if (!dniValid || !reunionValid) {
+      this.showAlert('Por favor, complete todos los campos obligatorios.', 'danger');
+      return false;
+    }
+
+    return true;
+  }
+
+  setupSubmission() {
+    if (this.form) {
+      this.form.addEventListener('submit', (e) => {
+        if (!this.validateForm()) {
+          e.preventDefault();
+          return;
+        }
+
+        // Show loading state
+        this.showLoadingState();
+      });
+    }
+  }
+
+  setupMeetingPreview() {
+    if (this.reunionSelect) {
+      this.reunionSelect.addEventListener('change', () => {
+        this.updateMeetingPreview();
+      });
+    }
+  }
+
+  updateMeetingPreview() {
+    if (!this.reunionSelect || !this.meetingPreview || !this.previewContent) return;
+
+    const selectedOption = this.reunionSelect.options[this.reunionSelect.selectedIndex];
+
     if (selectedOption.value) {
-      const titulo = selectedOption.textContent.trim();
+      const titulo = selectedOption.textContent.split(' - ')[0].trim();
       const fecha = selectedOption.dataset.fecha || '';
       const hora = selectedOption.dataset.hora || '';
-      
+
       let previewText = `<strong>${titulo}</strong>`;
-      if (fecha) previewText += `<br><small class="text-muted"><i class="fas fa-calendar me-1"></i>${fecha}</small>`;
-      if (hora) previewText += `<small class="text-muted"><i class="fas fa-clock me-1 ms-2"></i>${hora}</small>`;
-      
-      previewContent.innerHTML = previewText;
-      meetingPreview.classList.remove('d-none');
+      if (fecha) previewText += `<br><small class="text-muted"><i class="fas fa-calendar me-1" aria-hidden="true"></i>${fecha}</small>`;
+      if (hora) previewText += `<small class="text-muted"><i class="fas fa-clock me-1 ms-2" aria-hidden="true"></i>${hora}</small>`;
+
+      this.previewContent.innerHTML = previewText;
+      this.meetingPreview.classList.remove('d-none');
     } else {
-      meetingPreview.classList.add('d-none');
-    }
-  });
-  
-  // Enhanced select styling
-  const selects = document.querySelectorAll('.form-select');
-  selects.forEach(select => {
-    select.addEventListener('focus', function() {
-      this.parentElement.classList.add('focused');
-    });
-    
-    select.addEventListener('blur', function() {
-      this.parentElement.classList.remove('focused');
-    });
-  });
-  
-  // Auto-resize for mobile
-  function adjustForMobile() {
-    if (window.innerWidth <= 576) {
-      document.body.classList.add('mobile-view');
-    } else {
-      document.body.classList.remove('mobile-view');
+      this.meetingPreview.classList.add('d-none');
     }
   }
-  
-  adjustForMobile();
-  window.addEventListener('resize', adjustForMobile);
-  
-  // Dark mode toggle (if you want to add manual toggle)
-  const darkModeToggle = document.getElementById('darkModeToggle');
-  if (darkModeToggle) {
-    darkModeToggle.addEventListener('click', function() {
-      document.body.classList.toggle('dark-mode');
-      localStorage.setItem('darkMode', document.body.classList.contains('dark-mode'));
+
+  setupFieldEffects() {
+    document.querySelectorAll('.form-select, .form-control').forEach(element => {
+      element.addEventListener('focus', function() {
+        this.parentElement.style.transform = 'scale(1.01)';
+        this.parentElement.style.transition = 'transform 0.2s ease';
+      });
+
+      element.addEventListener('blur', function() {
+        this.parentElement.style.transform = 'scale(1)';
+      });
     });
-    
-    // Load saved dark mode preference
-    if (localStorage.getItem('darkMode') === 'true') {
-      document.body.classList.add('dark-mode');
+  }
+
+  setupKeyboardShortcuts() {
+    document.addEventListener('keydown', (e) => {
+      // Ctrl/Cmd + S to save
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        if (this.submitBtn && !this.submitBtn.disabled) {
+          this.submitBtn.click();
+        }
+      }
+
+      // Escape to cancel
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        window.location.href = "{{ url_for('asignaciones_global') }}";
+      }
+    });
+  }
+
+  showLoadingState() {
+    if (this.submitBtn && this.submitText && this.submitSpinner) {
+      this.submitBtn.disabled = true;
+      this.submitText.textContent = 'Guardando...';
+      this.submitSpinner.classList.remove('d-none');
+
+      // Reset after timeout (in case of error)
+      setTimeout(() => {
+        this.submitBtn.disabled = false;
+        this.submitText.textContent = 'Guardar Asignación';
+        this.submitSpinner.classList.add('d-none');
+      }, 5000);
     }
   }
-  
-  // Keyboard shortcuts
-  document.addEventListener('keydown', function(e) {
-    // Ctrl/Cmd + S to save
-    if ((e.ctrlKey || e.metaKey) && e.key === 's') {
-      e.preventDefault();
-      submitBtn.click();
+
+  showAlert(message, type = 'info') {
+    // Create alert element
+    const alertDiv = document.createElement('div');
+    alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+    alertDiv.setAttribute('role', 'alert');
+    alertDiv.innerHTML = `
+      <i class="bi bi-info-circle me-2" aria-hidden="true"></i>
+      ${message}
+      <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
+    `;
+
+    // Insert at top of form
+    const cardBody = this.form.closest('.card-body');
+    if (cardBody) {
+      cardBody.insertBefore(alertDiv, cardBody.firstChild);
+
+      // Auto-dismiss after 5 seconds
+      setTimeout(() => {
+        if (alertDiv.parentNode) {
+          alertDiv.remove();
+        }
+      }, 5000);
     }
-    
-    // Escape to cancel
-    if (e.key === 'Escape') {
-      window.location.href = "{{ url_for('asignaciones_global') }}";
+  }
+}
+
+// ========== RESPONSIVE MANAGER ==========
+class ResponsiveManager {
+  constructor() {
+    this.init();
+  }
+
+  init() {
+    this.adjustForScreenSize();
+    window.addEventListener('resize', () => this.adjustForScreenSize());
+  }
+
+  adjustForScreenSize() {
+    const isMobile = window.innerWidth <= 576;
+    document.body.classList.toggle('mobile-view', isMobile);
+  }
+}
+
+// ========== TOAST MANAGER ==========
+class ToastManager {
+  constructor() {
+    this.successToast = document.getElementById('successToast');
+    this.errorToast = document.getElementById('errorToast');
+  }
+
+  showSuccess(message) {
+    if (this.successToast) {
+      const toastBody = this.successToast.querySelector('.toast-body');
+      if (toastBody) toastBody.textContent = message;
+      const toast = new bootstrap.Toast(this.successToast);
+      toast.show();
     }
+  }
+
+  showError(message) {
+    if (this.errorToast) {
+      const toastBody = this.errorToast.querySelector('.toast-body');
+      if (toastBody) toastBody.textContent = message;
+      const toast = new bootstrap.Toast(this.errorToast);
+      toast.show();
+    }
+  }
+}
+
+// ========== INITIALIZATION ==========
+document.addEventListener('DOMContentLoaded', function() {
+  // Initialize managers
+  window.themeManager = new ThemeManager();
+  window.formManager = new FormManager();
+  window.responsiveManager = new ResponsiveManager();
+  window.toastManager = new ToastManager();
+
+  // Set initial opacity for fade-in effect
+  const container = document.querySelector('.container-fluid');
+  if (container) {
+    container.style.opacity = '0';
+    setTimeout(() => {
+      container.style.opacity = '1';
+      container.style.transition = 'opacity 0.6s ease-in-out';
+    }, 100);
+  }
+
+  // Enhanced focus management
+  const focusableElements = document.querySelectorAll('button, [href], input, select, textarea');
+  focusableElements.forEach(element => {
+    element.addEventListener('focus', function() {
+      this.classList.add('focused');
+    });
+    element.addEventListener('blur', function() {
+      this.classList.remove('focused');
+    });
   });
+
+  // Performance monitoring (optional)
+  if ('performance' in window) {
+    console.log(`Nueva asignación page loaded in ${performance.now()}ms`);
+  }
+});
+
+// ========== ERROR HANDLING ==========
+window.addEventListener('error', function(e) {
+  console.error('Error en nueva asignación:', e.error);
+});
+
+window.addEventListener('unhandledrejection', function(e) {
+  console.error('Promise rejection:', e.reason);
 });
 </script>
 {% endblock %}

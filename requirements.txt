@@ -2,6 +2,7 @@ flask
 flask-cors
 mysql-connector-python
 python-dotenv
+python-decouple
 gunicorn
 google-auth
 requests
@@ -11,3 +12,6 @@ qrcode[pil]
 geopy
 pandas
 openpyxl>=3.1.2
+flask-limiter
+werkzeug
+pydantic>=2.0.0

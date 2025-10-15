@@ -1,32 +1,65 @@
 from flask import Flask, request, jsonify, render_template, redirect, url_for, session, send_file, flash
 from flask_cors import CORS
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 import mysql.connector
-from config import MYSQL_CONFIG
+from config import (
+    MYSQL_CONFIG, APP_SECRET_KEY, JWT_SECRET, JWT_EXPIRE_HRS,
+    FIREBASE_SERVICE_ACCOUNT, RADIO_VALIDACION_METROS, TOLERANCIA_MINUTOS_REUNION,
+    SESSION_LIFETIME_MINUTES, RATE_LIMIT_REQUESTS, RATE_LIMIT_WINDOW
+)
+from schemas import LoginRequest, TokenRegistration, AsistenciaRequest
 import os
 from dotenv import load_dotenv
 from io import BytesIO
 from functools import wraps
-from datetime import datetime, timedelta,date
+from datetime import datetime, timedelta, date
 from notificaciones import enviar_push
 import re
 import logging
 from unicodedata import normalize
 import base64
 import jwt
-from mysql.connector import Error  
+from mysql.connector import Error
+from werkzeug.utils import secure_filename
 from utils import redimensionar_imagen
 import qrcode
 from geopy.distance import geodesic
 from PIL import Image
 import pandas as pd
-from flask import send_file
-from config import RADIO_VALIDACION_METROS, TOLERANCIA_MINUTOS_REUNION
+from pydantic import ValidationError
+from contextlib import closing
 
 
 
 # Configurar logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Funciones de seguridad
+def sanitize_string(text, max_length=255):
+    """Sanitiza strings eliminando caracteres peligrosos."""
+    if not text:
+        return ""
+    # Remover caracteres de control y potencialmente peligrosos
+    text = re.sub(r'[\x00-\x1f\x7f-\x9f]', '', str(text))
+    return text.strip()[:max_length]
+
+def validate_dni(dni):
+    """Valida formato de DNI argentino."""
+    if not dni or not isinstance(dni, str):
+        return False
+    dni = dni.strip()
+    if not re.match(r'^\d{7,8}$', dni):
+        return False
+    return True
+
+def validate_email(email):
+    """Valida formato básico de email."""
+    if not email:
+        return True  # Email opcional
+    pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    return re.match(pattern, email.strip()) is not None
 
 
 load_dotenv()
@@ -87,8 +120,16 @@ def generar_qr(contenido, nombre_base, logo_path="static/logo.png"):
 app = Flask(__name__)
 CORS(app)
 
-app.secret_key = 'clave-super-secreta'
-app.permanent_session_lifetime = timedelta(minutes=30)
+# Configuración segura
+app.secret_key = APP_SECRET_KEY
+app.permanent_session_lifetime = timedelta(minutes=SESSION_LIFETIME_MINUTES)
+
+# Rate limiting
+limiter = Limiter(
+    app=app,
+    key_func=get_remote_address,
+    default_limits=[f"{RATE_LIMIT_REQUESTS} per {RATE_LIMIT_WINDOW} seconds"]
+)
 
 def jwt_required_api(f):
     @wraps(f)
@@ -367,24 +408,33 @@ def home():
     return redirect(url_for('login_admin'))
 
 @app.route('/login', methods=['GET', 'POST'])
+@limiter.limit("5 per minute")  # Rate limiting estricto para login
 def login_admin():
     error = None
     if request.method == 'POST':
-        usuario = request.form['usuario']
-        password = request.form['password']
+        usuario = sanitize_string(request.form.get('usuario', ''))
+        password = sanitize_string(request.form.get('password', ''))
 
-        conn = get_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM admin WHERE usuario = %s AND password = %s", (usuario, password))
-        user = cursor.fetchone()
-        cursor.close()
-        conn.close()
-
-        if user:
-            session['admin'] = usuario
-            return redirect(url_for('dashboard'))
+        # Validación básica
+        if not usuario or not password:
+            error = "Usuario y contraseña son obligatorios"
+        elif len(usuario) < 3 or len(password) < 4:
+            error = "Credenciales inválidas"
         else:
-            error = "Usuario o contraseña incorrectos"
+            conn = get_connection()
+            cursor = conn.cursor()
+            try:
+                cursor.execute("SELECT * FROM admin WHERE usuario = %s AND password = %s", (usuario, password))
+                user = cursor.fetchone()
+                if user:
+                    session['admin'] = usuario
+                    session.permanent = True
+                    return redirect(url_for('dashboard'))
+                else:
+                    error = "Usuario o contraseña incorrectos"
+            finally:
+                cursor.close()
+                conn.close()
 
     return render_template('login.html', error=error)
 
@@ -392,14 +442,6 @@ def login_admin():
 def logout():
     session.pop('admin', None)
     return redirect(url_for('login_admin'))
-
-def login_required(f):
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        if 'admin' not in session:
-            return redirect(url_for('login_admin'))
-        return f(*args, **kwargs)
-    return decorated
 
 def slug(txt: str) -> str:
     """Normaliza y quita tildes para comparar sin importar mayúsculas."""
@@ -1172,19 +1214,20 @@ JWT_SECRET = os.getenv("JWT_SECRET", "cambia_esto_en_produccion")
 JWT_EXPIRE_HRS = int(os.getenv("JWT_EXPIRE_HRS", 8))  # 8 h por defecto
 
 @app.route("/api/login", methods=["POST"])
+@limiter.limit("10 per minute")  # Rate limiting para login API
 def login_chofer():
-    data = request.get_json(silent=True) or {}
-    dni = data.get("dni")
-
-    if not dni:
-        return jsonify(success=False, message="DNI requerido"), 400
+    try:
+        data = request.get_json(silent=True) or {}
+        login_data = LoginRequest(**data)
+    except ValidationError as e:
+        return jsonify(success=False, message=f"Datos inválidos: {e.errors()[0]['msg']}"), 400
 
     try:
         conn = get_connection()
         cursor = conn.cursor()
         cursor.execute(
             "SELECT nombre, sector FROM choferes WHERE dni = %s",
-            (dni,),
+            (login_data.dni,),
         )
         row = cursor.fetchone()
     except Error as e:
@@ -1203,13 +1246,13 @@ def login_chofer():
 
     # Generar JWT (expira en JWT_EXPIRE_HRS)
     exp = datetime.utcnow() + timedelta(hours=JWT_EXPIRE_HRS)
-    token = jwt.encode({"dni": dni, "exp": exp}, JWT_SECRET, algorithm="HS256")
+    token = jwt.encode({"dni": login_data.dni, "exp": exp}, JWT_SECRET, algorithm="HS256")
 
     return jsonify(
         success=True,
         nombre=nombre,
         sector=sector,
-        dni=dni,
+        dni=login_data.dni,
         token=token,
         expires_in=JWT_EXPIRE_HRS * 3600,
     )
@@ -1850,119 +1893,72 @@ def eliminar_objetivo(id):
 
 
 @app.route('/registrar_token', methods=['POST'])
+@limiter.limit("20 per minute")  # Rate limiting para registro de tokens
 def registrar_token():
     conn = None
     cursor = None
-    
+
     try:
-        # Verificar que la petición contenga JSON
-        if not request.is_json:
-            return jsonify({
-                "status": "error",
-                "mensaje": "Contenido debe ser JSON"
-            }), 400
-        
-        data = request.json
-        
-        # Validar que existan los campos requeridos
-        if not data:
-            return jsonify({
-                "status": "error",
-                "mensaje": "Datos JSON vacíos"
-            }), 400
-            
-        if 'dni' not in data or 'token' not in data:
-            return jsonify({
-                "status": "error",
-                "mensaje": "Faltan campos requeridos: dni y token"
-            }), 400
-        
-        dni = data['dni']
-        token = data['token']
-        
-        # Validar DNI
-        if not dni:
-            return jsonify({
-                "status": "error",
-                "mensaje": "DNI no puede estar vacío"
-            }), 400
-            
-        # Convertir DNI a string y validar formato (ejemplo para DNI argentino: 8 dígitos)
-        dni_str = str(dni).strip()
-        if not re.match(r'^\d{7,8}$', dni_str):
-            return jsonify({
-                "status": "error",
-                "mensaje": "DNI debe contener entre 7 y 8 dígitos"
-            }), 400
-        
-        # Validar token
-        if not token or not isinstance(token, str):
-            return jsonify({
-                "status": "error",
-                "mensaje": "Token debe ser una cadena de texto válida"
-            }), 400
-            
-        token = token.strip()
-        if len(token) < 10:  # Asumiendo longitud mínima del token
-            return jsonify({
-                "status": "error",
-                "mensaje": "Token demasiado corto (mínimo 10 caracteres)"
-            }), 400
-        
+        # Validar datos con Pydantic
+        data = request.get_json(silent=True) or {}
+        token_data = TokenRegistration(**data)
+
+        dni_str = token_data.dni
+        token = token_data.token
+
         # Operaciones de base de datos
         conn = get_connection()
         cursor = conn.cursor()
-        
+
         # Verificar si la conexión es válida
         if not conn or not cursor:
             raise Exception("Error al conectar con la base de datos")
-        
+
         # Ejecutar la consulta
         cursor.execute("""
             INSERT INTO tokens (dni, token, fecha_registro, fecha_actualizacion)
             VALUES (%s, %s, NOW(), NOW())
-            ON DUPLICATE KEY UPDATE 
+            ON DUPLICATE KEY UPDATE
                 token = VALUES(token),
                 fecha_actualizacion = NOW()
         """, (dni_str, token))
-        
+
         # Verificar si se afectaron filas
         if cursor.rowcount == 0:
             raise Exception("No se pudo registrar el token")
-        
+
         conn.commit()
-        
+
         # Registrar la operación exitosa
         logger.info(f"Token registrado/actualizado exitosamente para DNI: {dni_str}")
-        
+
         return jsonify({
             "status": "exitoso",
             "mensaje": "Token registrado correctamente",
             "dni": dni_str
         }), 200
-        
-    except ValueError as ve:
-        logger.error(f"Error de validación: {str(ve)}")
+
+    except ValidationError as e:
         return jsonify({
             "status": "error",
-            "mensaje": "Error en la validación de datos"
+            "mensaje": f"Datos inválidos: {e.errors()[0]['msg']}"
         }), 400
-        
+
     except Exception as e:
         logger.error(f"Error al registrar token: {str(e)}")
-        
+
         # Rollback si hay transacción activa
         if conn:
             try:
                 conn.rollback()
             except:
                 pass
-                
+
         return jsonify({
             "status": "error",
             "mensaje": "Error interno del servidor"
         }), 500
-        
+
     finally:
         # Cerrar recursos de base de datos
         if cursor:
@@ -1970,7 +1966,7 @@ def registrar_token():
                 cursor.close()
             except Exception as e:
                 logger.error(f"Error cerrando cursor: {str(e)}")
-                
+
         if conn:
             try:
                 conn.close()
@@ -2345,130 +2341,333 @@ def kpis_por_dni(dni):
 
     return jsonify({'chofer': chofer, 'tarjetas': tarjetas})
 
-
 @app.route('/api/empleados/<dni>/kpis/resumen')
-#@jwt_required_api
 def kpis_resumen(dni):
-    # ── 1) Parámetros de fecha ───────────────────────────────
-    fecha_inicio = request.args.get('from')  or request.args.get('fecha_inicio')
-    fecha_fin    = request.args.get('to')    or request.args.get('fecha_fin')
+    # Parámetros: from/to (prioridad), o rango + fecha_ref
+    rango     = (request.args.get('rango') or '').lower()  # dia|semana|mes|anio
+    fecha_ref = request.args.get('fecha_ref')
+    f_ini     = request.args.get('from')  or request.args.get('fecha_inicio')
+    f_fin     = request.args.get('to')    or request.args.get('fecha_fin')
 
-    cond_fecha   = ""
-    params_fecha = []
-    try:
-        if fecha_inicio:
-            dt_ini = datetime.strptime(fecha_inicio, '%Y-%m-%d').date()
-            cond_fecha += " AND DATE(k.fecha) >= %s"
-            params_fecha.append(dt_ini)
-        if fecha_fin:
-            dt_fin = datetime.strptime(fecha_fin, '%Y-%m-%d').date()
-            cond_fecha += " AND DATE(k.fecha) <= %s"
-            params_fecha.append(dt_fin)
-    except ValueError:
-        return jsonify({"error": "Formato de fecha inválido. Use YYYY-MM-DD"}), 400
+    if f_ini and f_fin:
+        try:
+            start = _parse_ymd(f_ini); end = _parse_ymd(f_fin)
+        except ValueError:
+            return jsonify({"error": "Formato de fecha inválido. Use YYYY-MM-DD"}), 400
+    else:
+        ref = _parse_ymd(fecha_ref) if fecha_ref else date.today()
+        start, end = rango_por_nombre(rango or "mes", ref)
+
+    pstart, pend = periodo_anterior(start, end)
 
     conn   = get_connection()
-    cursor = conn.cursor(dictionary=True)
+    cur    = conn.cursor(dictionary=True)
 
-    # ── 2) Datos del empleado ────────────────────────────────
-    cursor.execute("""
-        SELECT nombre, sector, imagen
+    # Datos de empleado
+    cur.execute("""
+        SELECT nombre, sector, imagen, sector_id
           FROM choferes
-         WHERE dni = %s
+         WHERE dni=%s
          LIMIT 1
     """, (dni,))
-    chofer = cursor.fetchone() or {}
-
+    chofer = cur.fetchone() or {}
+    foto = None
     if chofer.get('imagen'):
-        chofer['foto'] = (
-            "data:image/jpeg;base64," +
-            base64.b64encode(chofer['imagen']).decode()
+        foto = "data:image/jpeg;base64," + base64.b64encode(chofer['imagen']).decode()
+
+    # Indicadores activos del sector (global + del sector si aplica)
+    cur.execute("""
+        SELECT id, nombre, tipo_grafico, color_grafico, fill_grafico
+          FROM indicadores
+         WHERE activo=1 AND (sector_id = %s OR sector_id IS NULL)
+         ORDER BY nombre
+    """, (chofer.get('sector_id'),))
+    indicadores = cur.fetchall()
+
+    cards = []
+    for ind in indicadores:
+        iid = ind['id']
+
+        # VALOR actual (promedio; si tenés acumulativos, podés cambiar AVG por SUM según el indicador)
+        cur.execute("""
+            SELECT AVG(valor) AS val
+              FROM kpis
+             WHERE dni=%s AND indicador_id=%s
+               AND DATE(fecha) BETWEEN %s AND %s
+        """, (dni, iid, start, end))
+        row = cur.fetchone(); val_actual = float(row['val'] or 0)
+
+        # VALOR previo mismo tamaño de periodo
+        cur.execute("""
+            SELECT AVG(valor) AS val
+              FROM kpis
+             WHERE dni=%s AND indicador_id=%s
+               AND DATE(fecha) BETWEEN %s AND %s
+        """, (dni, iid, pstart, pend))
+        rowp = cur.fetchone(); val_prev = float(rowp['val'] or 0)
+
+        variacion_pct = 0.0 if val_prev == 0 else round((val_actual - val_prev) * 100.0 / abs(val_prev), 2)
+
+        # Objetivo vigente (año de la fecha de referencia “end”)
+        cur.execute("""
+            SELECT objetivo_tipo, objetivo_valor
+              FROM objetivos_indicadores
+             WHERE indicador_id=%s AND anio=%s
+             LIMIT 1
+        """, (iid, end.year))
+        obj = cur.fetchone()
+        objetivo_tipo  = (obj['objetivo_tipo'] if obj else ">=") or ">="
+        objetivo_valor = float(obj['objetivo_valor'] if obj else 0)
+
+        # Semáforo
+        cumple = (
+            (objetivo_tipo == ">=" and val_actual >= objetivo_valor) or
+            (objetivo_tipo == "<=" and val_actual <= objetivo_valor) or
+            (objetivo_tipo == ">"  and val_actual >  objetivo_valor) or
+            (objetivo_tipo == "<"  and val_actual <  objetivo_valor)
         )
-    else:
-        chofer['foto'] = None
-    chofer.pop('imagen', None)
+        # “cerca” = a 90% del objetivo, sólo aplica para >= o <= (ajustalo si querés)
+        cerca = False
+        if objetivo_valor:
+            if objetivo_tipo in (">=", ">"):
+                cerca = (not cumple) and (val_actual >= 0.9 * objetivo_valor)
+            elif objetivo_tipo in ("<=", "<"):
+                cerca = (not cumple) and (val_actual <= objetivo_valor * 1.1)
+
+        # Sparkline (últimos 30 días)
+        cur.execute("""
+            SELECT DATE(fecha) d, AVG(valor) v
+              FROM kpis
+             WHERE dni=%s AND indicador_id=%s
+               AND DATE(fecha) BETWEEN %s AND %s
+          GROUP BY DATE(fecha)
+          ORDER BY d ASC
+        """, (dni, iid, end - timedelta(days=29), end))
+        spark = [float(r['v'] or 0) for r in cur.fetchall()]
+
+        cards.append({
+            "indicador_id": iid,
+            "indicador":    ind["nombre"],
+            "valor_actual": round(val_actual, 2),
+            "variacion_pct": variacion_pct,
+            "objetivo":      round(objetivo_valor, 2),
+            "tipo_objetivo": objetivo_tipo,
+            "semaforo":      "cumple" if cumple else ("cerca" if cerca else "fuera"),
+            "sparkline":     spark,
+            "tipo_grafico":  ind["tipo_grafico"],
+            "color_grafico": ind["color_grafico"],
+            "fill_grafico":  bool(ind["fill_grafico"])
+        })
+
+    cur.close(); conn.close()
+
+    return jsonify({
+        "empleado": {
+            "dni": dni,
+            "nombre": chofer.get("nombre"),
+            "sector": chofer.get("sector"),
+            "foto": foto
+        },
+        "rango": {"inicio": start.isoformat(), "fin": end.isoformat()},
+        "cards": cards
+    })
+
+#@app.route('/api/empleados/<dni>/kpis/resumen')
+#@jwt_required_api
+#def kpis_resumen(dni):
+#    # ── 1) Parámetros de fecha ───────────────────────────────
+#    fecha_inicio = request.args.get('from')  or request.args.get('fecha_inicio')
+#    fecha_fin    = request.args.get('to')    or request.args.get('fecha_fin')
+#
+#    cond_fecha   = ""
+#    params_fecha = []
+#    try:
+#        if fecha_inicio:
+#            dt_ini = datetime.strptime(fecha_inicio, '%Y-%m-%d').date()
+#            cond_fecha += " AND DATE(k.fecha) >= %s"
+#            params_fecha.append(dt_ini)
+#        if fecha_fin:
+#            dt_fin = datetime.strptime(fecha_fin, '%Y-%m-%d').date()
+#            cond_fecha += " AND DATE(k.fecha) <= %s"
+#            params_fecha.append(dt_fin)
+#    except ValueError:
+#        return jsonify({"error": "Formato de fecha inválido. Use YYYY-MM-DD"}), 400
+
+#    conn   = get_connection()
+#    cursor = conn.cursor(dictionary=True)
+
+#    # ── 2) Datos del empleado ────────────────────────────────
+#    cursor.execute("""
+#        SELECT nombre, sector, imagen
+#          FROM choferes
+#         WHERE dni = %s
+#         LIMIT 1
+#    """, (dni,))
+#    chofer = cursor.fetchone() or {}
+
+#    if chofer.get('imagen'):
+#        chofer['foto'] = (
+#            "data:image/jpeg;base64," +
+#            base64.b64encode(chofer['imagen']).decode()
+#        )
+#    else:
+#        chofer['foto'] = None
+#    chofer.pop('imagen', None)
 
     # ── 3) KPIs promediados (filtrados) ──────────────────────
-    sql = f"""
-        SELECT i.id            AS indicador_id,
-               i.nombre        AS indicador,
-               i.color_grafico AS color,
-               i.tipo_grafico  AS tipo,
-               i.fill_grafico  AS fill,
-               ROUND(AVG(k.valor),2) AS valor
-          FROM kpis k
-          JOIN indicadores i ON i.id = k.indicador_id
-         WHERE k.dni = %s
-           {cond_fecha}
-      GROUP BY i.id, i.nombre, i.color_grafico, i.tipo_grafico, i.fill_grafico
-      ORDER BY i.nombre
-    """
+#    sql = f"""
+#        SELECT i.id            AS indicador_id,
+#               i.nombre        AS indicador,
+#               i.color_grafico AS color,
+#               i.tipo_grafico  AS tipo,
+#               i.fill_grafico  AS fill,
+#               ROUND(AVG(k.valor),2) AS valor
+#          FROM kpis k
+#          JOIN indicadores i ON i.id = k.indicador_id
+#         WHERE k.dni = %s
+#           {cond_fecha}
+#      GROUP BY i.id, i.nombre, i.color_grafico, i.tipo_grafico, i.fill_grafico
+#      ORDER BY i.nombre
+#    """
 
-    # DEBUG opcional (sin mogrify, imprime la consulta y los params)
-    if app.debug:
-        app.logger.debug("SQL: %s", sql)
-        app.logger.debug("PARAMS: %s", (dni, *params_fecha))
+#    # DEBUG opcional (sin mogrify, imprime la consulta y los params)
+#    if app.debug:
+#        app.logger.debug("SQL: %s", sql)
+#        app.logger.debug("PARAMS: %s", (dni, *params_fecha))
 
-    cursor.execute(sql, (dni, *params_fecha))
-    tarjetas = [dict(r) for r in cursor.fetchall()]
+#    cursor.execute(sql, (dni, *params_fecha))
+#    tarjetas = [dict(r) for r in cursor.fetchall()]
 
-    cursor.close()
-    conn.close()
-    return jsonify({"empleado": chofer, "kpis": tarjetas})
+#    cursor.close()
+#    conn.close()
+#    return jsonify({"empleado": chofer, "kpis": tarjetas})
+
+# @app.route('/api/empleados/<dni>/indicadores/<int:indicador_id>/serie')
+#@jwt_required_api
+#def serie_indicador(dni, indicador_id):
+#    # 1) Parámetros de rango ---------------------------------------
+#    fecha_inicio = request.args.get('from')
+#    fecha_fin    = request.args.get('to')
+#    if not (fecha_inicio and fecha_fin):
+#        return jsonify({"error": "Debe enviar from y to"}), 400
+#    try:
+#        dt_ini = datetime.strptime(fecha_inicio, '%Y-%m-%d').date()
+#        dt_fin = datetime.strptime(fecha_fin,    '%Y-%m-%d').date()
+#    except ValueError:
+#        return jsonify({"error": "Formato de fecha inválido"}), 400
+
+#    conn   = get_connection()
+#    cursor = conn.cursor(dictionary=True)
+
+#    # 2) Metadatos del indicador -----------------------------------
+#    cursor.execute("""
+#        SELECT nombre, tipo_grafico, color_grafico, fill_grafico
+#          FROM indicadores
+#         WHERE id = %s
+#    """, (indicador_id,))
+#    meta = cursor.fetchone()
+#    if not meta:
+#        cursor.close(); conn.close()
+#        return jsonify({"error": "Indicador no encontrado"}), 404
+#
+#    # 3) Serie histórica (agrupada por día) ------------------------
+#    cursor.execute("""
+#        SELECT DATE(fecha)  AS fecha,
+#               ROUND(AVG(valor), 2) AS avg_val
+#          FROM kpis
+#         WHERE dni          = %s
+#           AND indicador_id = %s
+#           AND DATE(fecha) BETWEEN %s AND %s
+#      GROUP BY DATE(fecha)
+#      ORDER BY DATE(fecha)
+#    """, (dni, indicador_id, dt_ini, dt_fin))
+#    rows = cursor.fetchall()
+
+#    cursor.close(); conn.close()
+
+#    labels = [r['fecha'].strftime('%Y-%m-%d') for r in rows]
+#    data   = [float(r['avg_val']) for r in rows]
+
+#    return jsonify({
+#        "labels": labels,
+#        "data":   data,
+#        "color":  meta['color_grafico'] or "#1565C0",
+#        "fill":   bool(meta['fill_grafico']),
+#        "tipo":   meta['tipo_grafico'] or "line"
+#    })
 
 @app.route('/api/empleados/<dni>/indicadores/<int:indicador_id>/serie')
-#@jwt_required_api
 def serie_indicador(dni, indicador_id):
-    # 1) Parámetros de rango ---------------------------------------
-    fecha_inicio = request.args.get('from')
-    fecha_fin    = request.args.get('to')
-    if not (fecha_inicio and fecha_fin):
-        return jsonify({"error": "Debe enviar from y to"}), 400
+    f_ini = request.args.get('from')
+    f_fin = request.args.get('to')
+    if not (f_ini and f_fin):
+        return jsonify({"error": "Debe enviar from y to (YYYY-MM-DD)"}), 400
+
     try:
-        dt_ini = datetime.strptime(fecha_inicio, '%Y-%m-%d').date()
-        dt_fin = datetime.strptime(fecha_fin,    '%Y-%m-%d').date()
+        start = _parse_ymd(f_ini); end = _parse_ymd(f_fin)
     except ValueError:
         return jsonify({"error": "Formato de fecha inválido"}), 400
 
-    conn   = get_connection()
-    cursor = conn.cursor(dictionary=True)
+    agregacion = (request.args.get('agregacion') or 'diaria').lower()
 
-    # 2) Metadatos del indicador -----------------------------------
-    cursor.execute("""
+    # metadatos indicador
+    conn = get_connection()
+    cur  = conn.cursor(dictionary=True)
+    cur.execute("""
         SELECT nombre, tipo_grafico, color_grafico, fill_grafico
-          FROM indicadores
-         WHERE id = %s
+          FROM indicadores WHERE id=%s
     """, (indicador_id,))
-    meta = cursor.fetchone()
+    meta = cur.fetchone()
     if not meta:
-        cursor.close(); conn.close()
+        cur.close(); conn.close()
         return jsonify({"error": "Indicador no encontrado"}), 404
 
-    # 3) Serie histórica (agrupada por día) ------------------------
-    cursor.execute("""
-        SELECT DATE(fecha)  AS fecha,
-               ROUND(AVG(valor), 2) AS avg_val
+    # SQL de agrupación
+    if agregacion == "mensual":
+        group = "DATE_FORMAT(fecha, '%%Y-%%m-01')"
+    elif agregacion == "semanal":
+        # ISO week -> lunes
+        group = "STR_TO_DATE(CONCAT(YEARWEEK(fecha, 3), ' Monday'), '%%X%%V %%W')"
+    else:
+        group = "DATE(fecha)"
+
+    cur.execute(f"""
+        SELECT {group} AS x, ROUND(AVG(valor),2) AS y
           FROM kpis
-         WHERE dni          = %s
-           AND indicador_id = %s
+         WHERE dni=%s AND indicador_id=%s
            AND DATE(fecha) BETWEEN %s AND %s
-      GROUP BY DATE(fecha)
-      ORDER BY DATE(fecha)
-    """, (dni, indicador_id, dt_ini, dt_fin))
-    rows = cursor.fetchall()
+      GROUP BY x
+      ORDER BY x
+    """, (dni, indicador_id, start, end))
+    rows = cur.fetchall()
 
-    cursor.close(); conn.close()
+    labels = [ (r["x"].isoformat() if isinstance(r["x"], (datetime, date)) else str(r["x"])) for r in rows ]
+    serie  = [ float(r["y"] or 0) for r in rows ]
 
-    labels = [r['fecha'].strftime('%Y-%m-%d') for r in rows]
-    data   = [float(r['avg_val']) for r in rows]
+    # objetivo del año del fin del rango
+    cur.execute("""
+        SELECT objetivo_valor FROM objetivos_indicadores
+         WHERE indicador_id=%s AND anio=%s
+         LIMIT 1
+    """, (indicador_id, end.year))
+    obj = cur.fetchone()
+    objetivo = float(obj["objetivo_valor"]) if obj else 0.0
+
+    cur.close(); conn.close()
 
     return jsonify({
-        "labels": labels,
-        "data":   data,
-        "color":  meta['color_grafico'] or "#1565C0",
-        "fill":   bool(meta['fill_grafico']),
-        "tipo":   meta['tipo_grafico'] or "line"
+        "indicador": meta["nombre"],
+        "tipo":      meta["tipo_grafico"] or "line",
+        "color":     meta["color_grafico"] or "#1565C0",
+        "fill":      bool(meta["fill_grafico"]),
+        "agregacion": agregacion,
+        "objetivo":  round(objetivo, 2),
+        "labels":    labels,
+        "data":      serie
     })
+
+
+
 
 @app.route('/kpis/promedio_mes/<dni>')
 #@jwt_required_api
@@ -2981,22 +3180,18 @@ def nueva_reunion_admin():
 
 # REGISTRAR ASISTENCIA CON VALIDACION DE HORA, FECHA Y UBICACION DINAMICA
 @app.route('/api/marcar_asistencia', methods=['POST'])
+@limiter.limit("30 per minute")  # Rate limiting para asistencia
 def marcar_asistencia():
-    data = request.get_json()
-
-    dni = data.get('dni')
-    reunion_id = data.get('reunion_id')
-    lat_raw = data.get('lat')
-    lon_raw = data.get('lon')
-
-    if dni is None or reunion_id is None or lat_raw is None or lon_raw is None:
-        return jsonify({"error": "❌ Faltan datos obligatorios: dni, reunion_id, lat, lon"}), 400
-
     try:
-        lat = float(lat_raw)
-        lon = float(lon_raw)
-    except ValueError:
-        return jsonify({"error": "❌ Coordenadas inválidas"}), 400
+        data = request.get_json()
+        asistencia_data = AsistenciaRequest(**data)
+    except ValidationError as e:
+        return jsonify({"error": f"❌ Datos inválidos: {e.errors()[0]['msg']}"}), 400
+
+    lat = asistencia_data.lat
+    lon = asistencia_data.lon
+    dni = asistencia_data.dni
+    reunion_id = asistencia_data.reunion_id
 
     ventana_tolerancia = timedelta(minutes=TOLERANCIA_MINUTOS_REUNION)
 
@@ -3122,7 +3317,6 @@ def editar_reunion_admin(id):
     return render_template("admin_reunion_editar.html", reunion=reunion)
 
 #BORRAR REUNION
-from datetime import datetime, timedelta
 
 @app.route("/admin/reuniones/<int:id>/eliminar", methods=["GET", "POST"])
 def eliminar_reunion_admin(id):
@@ -3416,23 +3610,6 @@ def toggle_obligatorio(id_asignacion):
     flash("Estado de obligatoriedad actualizado", "success")
     return redirect(url_for("reuniones_admin", _anchor=f"asignaciones-reunion-{reunion_id}"))
 
-def obtener_asignaciones(id_reunion):
-    conn = get_connection()
-    cursor = conn.cursor(dictionary=True)
-
-    cursor.execute("""
-        SELECT ar.id, ar.dni_chofer, ar.obligatorio,
-               c.nombre, c.sector
-        FROM asignaciones_reuniones ar
-        JOIN choferes c ON ar.dni_chofer = c.dni
-        WHERE ar.id_reunion = %s
-    """, (id_reunion,))
-
-    asignaciones = cursor.fetchall()
-    cursor.close()
-    conn.close()
-    return asignaciones
-
 def obtener_reuniones_con_asignaciones():
     conn = get_connection()
     cursor = conn.cursor(dictionary=True)
@@ -3524,18 +3701,19 @@ def asignaciones_global():
         filtro_reunion=reunion_id,
     )
 
-from utils import db_cursor
 @app.route("/admin/asignaciones/nueva", methods=["GET", "POST"])
 def asignacion_nueva():
     next_view = None
-    with db_cursor() as (conn, cursor):
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
         if request.method == "POST":
             dni = request.form["dni"]
             reunion_id = request.form["reunion_id"]
             obligatorio = int("obligatorio" in request.form)
 
             cursor.execute("""
-                SELECT id FROM asignaciones_reuniones 
+                SELECT id FROM asignaciones_reuniones
                 WHERE dni_chofer = %s AND id_reunion = %s
             """, (dni, reunion_id))
             existente = cursor.fetchone()
@@ -3549,6 +3727,7 @@ def asignacion_nueva():
                     INSERT INTO asignaciones_reuniones (dni_chofer, id_reunion, obligatorio)
                     VALUES (%s, %s, %s)
                 """, (dni, reunion_id, obligatorio))
+                conn.commit()
                 flash("✅ Asignación creada correctamente", "success")
                 next_view = "asignaciones_global"
 
@@ -3558,16 +3737,19 @@ def asignacion_nueva():
         cursor.execute("SELECT id, titulo FROM reuniones WHERE activa = TRUE")
         reuniones = cursor.fetchall()
 
-    if next_view:
-        return redirect(url_for(next_view))
+        if next_view:
+            return redirect(url_for(next_view))
 
-    return render_template("asignaciones_nuevo.html", choferes=choferes, reuniones=reuniones)
+        return render_template("asignaciones_nuevo.html", choferes=choferes, reuniones=reuniones)
+    finally:
+        cursor.close()
+        conn.close()
 
 
 
 @app.route('/api/reuniones/<dni>', methods=['GET'])
 def reuniones_por_dni(dni):
-    conn = mysql.connector.connect(**MYSQL_CONFIG)
+    conn = get_connection()
     cursor = conn.cursor(dictionary=True)
 
     query = """
@@ -3629,7 +3811,9 @@ def reuniones_por_dni(dni):
 
 @app.route("/admin/asignaciones/<int:id_asignacion>/editar", methods=["GET", "POST"])
 def asignacion_editar(id_asignacion):
-    with db_cursor() as (conn, cursor):
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
         if request.method == "POST":
             nuevo_dni = request.form["dni"]
             nuevo_reunion_id = request.form["reunion_id"]
@@ -3665,12 +3849,15 @@ def asignacion_editar(id_asignacion):
         cursor.execute("SELECT id, titulo FROM reuniones WHERE activa = TRUE")
         reuniones = cursor.fetchall()
 
-    return render_template(
-        "asignaciones_editar.html",
-        asignacion=asignacion,
-        choferes=choferes,
-        reuniones=reuniones
-    )
+        return render_template(
+            "asignaciones_editar.html",
+            asignacion=asignacion,
+            choferes=choferes,
+            reuniones=reuniones
+        )
+    finally:
+        cursor.close()
+        conn.close()
 
 @app.route("/admin/gastos")
 def admin_gastos():
@@ -3682,15 +3869,17 @@ def admin_ordenes():
 @app.route('/indicadores/eliminar/<int:id>', methods=['POST', 'GET'])
 @login_required
 def eliminar_indicador(id):
+    conn = get_connection()
+    cursor = conn.cursor()
     try:
-        cur = mysql.connection.cursor()
-        cur.execute("DELETE FROM indicadores WHERE id = %s", (id,))
-        mysql.connection.commit()
+        cursor.execute("DELETE FROM indicadores WHERE id = %s", (id,))
+        conn.commit()
         flash("Indicador eliminado correctamente", "success")
     except Exception as e:
         flash(f"Error al eliminar indicador: {e}", "danger")
     finally:
-        cur.close()
+        cursor.close()
+        conn.close()
     return redirect(url_for('admin_indicadores'))
 
 
@@ -3855,11 +4044,8 @@ def delete_proveedor(id):
     cursor.close(); conn.close()
     return jsonify({'message': 'Proveedor eliminado correctamente'})
 
-from flask import render_template, request, redirect, url_for, flash
-from contextlib import closing
-
 # 🔹 Utilidad para obtener rubros
-def get_rubros():
+def get_rubros_list():
     conn = get_connection()
     with closing(conn.cursor(dictionary=True)) as cursor:
         cursor.execute("SELECT * FROM rubros ORDER BY nombre")
@@ -3867,9 +4053,6 @@ def get_rubros():
     conn.close()
     return rubros
 
-
-from flask import render_template, request, redirect, url_for, flash
-from contextlib import closing
 
 # ============================
 #   LISTAR PROVEEDORES
@@ -3926,7 +4109,7 @@ def create_proveedor_form():
             conn.close()
         return redirect(url_for("admin_proveedores"))
 
-    rubros = get_rubros()
+    rubros = get_rubros_list()
     return render_template("proveedores/proveedores_new.html", rubros=rubros)
 
 
@@ -3974,7 +4157,7 @@ def update_proveedor_form(id):
         flash("⚠️ Proveedor no encontrado", "warning")
         return redirect(url_for("admin_proveedores"))
 
-    rubros = get_rubros()
+    rubros = get_rubros_list()
     return render_template("proveedores/proveedores_edit.html", proveedor=proveedor, rubros=rubros)
 
 
@@ -4008,8 +4191,129 @@ def delete_proveedor_form(id):
 
     return render_template("proveedores/proveedores_delete.html", proveedor=proveedor)
 
+# ────────── Utils de rangos y periodos ──────────
+from datetime import date, timedelta, datetime
+
+def _parse_ymd(s: str) -> date:
+    return datetime.strptime(s, "%Y-%m-%d").date()
+
+def rango_por_nombre(rango: str, ref: date) -> tuple[date, date]:
+    r = (rango or "mes").lower()
+    if r == "dia":
+        return ref, ref
+    if r == "semana":
+        start = ref - timedelta(days=ref.weekday())  # lunes
+        return start, start + timedelta(days=6)
+    if r == "anio":
+        return date(ref.year, 1, 1), date(ref.year, 12, 31)
+    # mes (default)
+    start = ref.replace(day=1)
+    if start.month == 12:
+        end = date(start.year, 12, 31)
+    else:
+        end = (start.replace(month=start.month+1, day=1) - timedelta(days=1))
+    return start, end
+
+def periodo_anterior(start: date, end: date) -> tuple[date, date]:
+    delta = (end - start) + timedelta(days=1)
+    prev_end = start - timedelta(days=1)
+    prev_start = prev_end - delta + timedelta(days=1)
+    return prev_start, prev_end
 
 
-if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+
+
+from datetime import date, datetime
+from flask import request, jsonify
+
+@app.route('/api/vales/historial/<dni>', methods=['GET'])
+def historial_vales(dni):
+    conn = None
+    cursor = None
+    try:
+        # Filtros opcionales
+        desde  = request.args.get('desde')   # 'YYYY-MM-DD'
+        hasta  = request.args.get('hasta')   # 'YYYY-MM-DD'
+        mes    = request.args.get('mes', type=int)
+        anio   = request.args.get('anio', type=int)
+        limit  = request.args.get('limit', default=20, type=int)
+        offset = request.args.get('offset', default=0,  type=int)
+        sort   = request.args.get('sort', default='desc')  # 'asc' | 'desc'
+        sort_dir = 'ASC' if (str(sort).lower() == 'asc') else 'DESC'
+
+        where = ["dni = %s"]
+        params = [dni]
+
+        # Validación/armado de fechas
+        if desde:
+            datetime.strptime(desde, "%Y-%m-%d")
+            where.append("DATE(fecha_solicitud) >= %s")
+            params.append(desde)
+
+        if hasta:
+            datetime.strptime(hasta, "%Y-%m-%d")
+            where.append("DATE(fecha_solicitud) <= %s")
+            params.append(hasta)
+
+        # Si no hay rango explícito, permito filtrar por mes/año
+        if not (desde or hasta):
+            if mes:
+                where.append("MONTH(fecha_solicitud) = %s")
+                params.append(mes)
+            if anio:
+                where.append("YEAR(fecha_solicitud) = %s")
+                params.append(anio)
+
+        where_clause = " AND ".join(where)
+
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        # Total para paginación
+        cursor.execute(f"""
+            SELECT COUNT(*) AS total
+            FROM vales_solicitados
+            WHERE {where_clause}
+        """, tuple(params))
+        total = cursor.fetchone()["total"]
+
+        # Página
+        params_page = params + [limit, offset]
+        cursor.execute(f"""
+            SELECT
+                id,
+                dni,
+                DATE_FORMAT(fecha_solicitud, '%%Y-%%m-%%d') AS fecha_solicitud,
+                MONTH(fecha_solicitud) AS mes,
+                YEAR(fecha_solicitud)  AS anio
+            FROM vales_solicitados
+            WHERE {where_clause}
+            ORDER BY fecha_solicitud {sort_dir}, id {sort_dir}
+            LIMIT %s OFFSET %s
+        """, tuple(params_page))
+        items = cursor.fetchall()
+
+        return jsonify({
+            "dni": dni,
+            "count": int(total),
+            "limit": limit,
+            "offset": offset,
+            "items": items
+        }), 200
+
+    except ValueError:
+        # Error de formato de fecha
+        return jsonify({"error": "Formato de fecha inválido. Use YYYY-MM-DD"}), 400
+    except Exception as e:
+        # No hace falta commit, es SELECT
+        return jsonify({"error": f"Error al obtener historial de vales: {str(e)}"}), 500
+    finally:
+        if cursor: 
+            try: cursor.close()
+            except: pass
+        if conn:
+            try: conn.close()
+            except: pass
+
+
     

@@ -3,12 +3,105 @@
 {% block header %}📈 KPIs de Empleado por DNI{% endblock %}
 
 {% block content %}
-<div class="mb-4">
-  <label class="form-label">Buscar por DNI</label>
-  <div class="input-group">
-    <input type="text" id="dniInput" class="form-control" placeholder="DNI del empleado"
-           onkeydown="if(event.key==='Enter') buscarKPIs()">
-    <button class="btn btn-primary" onclick="buscarKPIs()">Buscar</button>
+<style>
+/* === Dark Dashboard Theme for KPIs === */
+:root{
+  --bg: #0f172a;           /* slate-900 */
+  --panel: #111827;        /* gray-900 */
+  --text: #e5e7eb;         /* gray-200 */
+  --muted: #94a3b8;        /* slate-400 */
+  --brand: #38bdf8;        /* sky-400 */
+  --ok: #16a34a;           /* green-600 */
+  --warn: #eab308;         /* yellow-500 */
+  --bad: #dc2626;          /* red-600 */
+}
+
+body{
+  background: var(--bg);
+  color: var(--text);
+}
+
+.card{
+  background: var(--panel);
+  border: 1px solid rgba(255,255,255,0.06);
+}
+
+#infoEmpleado{
+  background: #1e293b; /* slate-800 */
+  padding: 1rem 1.5rem;
+  border-radius: 12px;
+  color: var(--text);
+  box-shadow: 0 2px 5px rgba(0,0,0,0.25);
+}
+
+#fotoEmpleado{
+  width: 70px;
+  height: 70px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid var(--brand);
+}
+
+#nombreEmpleado{
+  font-weight: 700;
+  font-size: 1.2rem;
+}
+
+#sectorEmpleado{
+  text-transform: capitalize;
+  font-size: .9rem;
+  color: var(--muted);
+}
+
+/* KPI Cards */
+.kpi-card{
+  border-radius: 14px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+  color: #fff;
+  padding: 1rem 1.2rem;
+  transition: transform .2s, box-shadow .2s;
+  cursor: default;
+  height: 100%;
+}
+.kpi-card:hover{
+  transform: translateY(-3px);
+  box-shadow: 0 4px 10px rgba(0,0,0,0.4);
+}
+.kpi-title{
+  font-size: 0.8rem;
+  font-weight: 600;
+  opacity: 0.9;
+  text-transform: uppercase;
+}
+.kpi-value{
+  font-size: 2rem;
+  font-weight: 700;
+  line-height: 1.2;
+  margin: .2rem 0 .4rem;
+}
+.kpi-footer{
+  font-size: .85rem;
+  opacity: .95;
+  display: flex;
+  justify-content: space-between;
+}
+.badge{
+  font-size: .7rem;
+}
+
+  .chart-container {
+    border-radius: 10px;
+    overflow: hidden;
+  }
+</style>
+<div class="card mb-4">
+  <div class="card-body">
+    <label class="form-label fw-bold">Buscar por DNI</label>
+    <div class="input-group">
+      <input type="text" id="dniInput" class="form-control" placeholder="DNI del empleado"
+             onkeydown="if(event.key==='Enter') buscarKPIs()">
+      <button class="btn btn-primary" onclick="buscarKPIs()">Buscar</button>
+    </div>
   </div>
 </div>
 
@@ -18,6 +111,13 @@
   <div>
     <h5 id="nombreEmpleado" class="m-0"></h5>
     <small id="sectorEmpleado" class="text-muted"></small>
+  </div>
+</div>
+
+<!-- Loading spinner -->
+<div id="loading" class="text-center my-4" style="display:none;">
+  <div class="spinner-border text-primary" role="status">
+    <span class="visually-hidden">Cargando...</span>
   </div>
 </div>
 
@@ -46,17 +146,28 @@
     tCont.innerHTML = ''; gCont.innerHTML = '';
     charts.forEach(c=>c.destroy()); charts.length = 0;
 
-    // ── Fetch tarjetas + datos del chofer ──────────────
-    const res  = await fetch(`/api/kpis_por_dni/${dni}`);
-    const json = await res.json();
-    const { chofer={}, tarjetas=[] } = json;
+    // mostrar loading
+    document.getElementById('loading').style.display = 'block';
 
-    /* Mostrar info chofer si existe */
-    if (Object.keys(chofer).length) {
-      nomLbl.textContent    = chofer.nombre || '(sin nombre)';
-      secLbl.textContent    = chofer.sector || '';
-      if (chofer.foto) {
-        fotoImg.src = chofer.foto;
+    // ── Fetch tarjetas + datos del empleado ──────────────
+    const res  = await fetch(`/api/empleados/${dni}/kpis/resumen`);
+    if (!res.ok) {
+      document.getElementById('loading').style.display = 'none';
+      alert('Error: ' + res.status + ' - ' + res.statusText);
+      return;
+    }
+    const json = await res.json();
+    const { empleado={}, cards=[] } = json;
+
+    // ocultar loading
+    document.getElementById('loading').style.display = 'none';
+
+    /* Mostrar info empleado si existe */
+    if (Object.keys(empleado).length) {
+      nomLbl.textContent    = empleado.nombre || '(sin nombre)';
+      secLbl.textContent    = empleado.sector || '';
+      if (empleado.foto) {
+        fotoImg.src = empleado.foto;
         fotoImg.style.display = '';
       } else {
         fotoImg.style.display = 'none';
@@ -65,22 +176,47 @@
     }
 
     /* Tarjetas */
-    if (!tarjetas.length) {
+    if (!cards.length) {
       tCont.innerHTML =
         '<div class="alert alert-warning w-100 text-center">No se encontraron KPIs.</div>';
       return;
     }
 
-    for (const t of tarjetas) {
+    for (const t of cards) {
       const cid = 'graf_' + slug(t.indicador);
+
+      // Color coding based on semaforo
+      let bgColor = t.color_grafico || '#0d6efd';
+      let textColor = 'text-white';
+      if (t.semaforo === 'cumple') bgColor = '#28a745'; // green
+      else if (t.semaforo === 'cerca') { bgColor = '#ffc107'; textColor = 'text-dark'; } // yellow
+      else if (t.semaforo === 'fuera') bgColor = '#dc3545'; // red
+
+      // Calculate deviation from objective
+      const desv = t.valor_actual - t.objetivo;
+      const desvPct = t.objetivo !== 0 ? (desv / t.objetivo) * 100 : 0;
+      const desvSign = desv >= 0 ? '+' : '';
+      const desvFormatted = desvSign + desv.toFixed(1);
+      const desvPctFormatted = desvSign + desvPct.toFixed(1) + '%';
+      const objFormatted = t.objetivo.toFixed(1);
+      const valFormatted = typeof t.valor_actual === 'number' ? t.valor_actual.toFixed(1) : t.valor_actual;
+
+      // Icon based on semaforo
+      let icon = '';
+      if (t.semaforo === 'cumple') icon = '✅';
+      else if (t.semaforo === 'cerca') icon = '⚠️';
+      else if (t.semaforo === 'fuera') icon = '❌';
 
       // tarjeta
       tCont.insertAdjacentHTML('beforeend', `
         <div class="col-sm-6 col-md-4 col-lg-3">
-          <div class="card text-white" style="background-color:${t.color||'#0d6efd'}">
-            <div class="card-body p-2">
-              <small class="text-uppercase">${t.indicador}</small>
-              <h3 class="m-0">${t.valor}</h3>
+          <div class="kpi-card" style="background: linear-gradient(135deg, ${bgColor} 0%, ${bgColor}dd 100%);">
+            <div class="mb-2">${icon}</div>
+            <div class="kpi-title">${t.indicador}</div>
+            <div class="kpi-value">${valFormatted}</div>
+            <div class="kpi-footer">
+              <span>Desv: ${desvFormatted} (${desvPctFormatted})</span>
+              <span>Obj: ${objFormatted}</span>
             </div>
           </div>
         </div>`);
@@ -88,33 +224,41 @@
       // contenedor gráfico
       gCont.insertAdjacentHTML('beforeend', `
         <div class="col-md-6 mb-4">
-          <div class="card"><div class="card-body">
-            <h6 class="card-title">${t.indicador}</h6>
+          <div class="card chart-container shadow-sm"><div class="card-body">
+            <h6 class="card-title text-center fw-bold">${t.indicador}</h6>
             <canvas id="${cid}"></canvas>
           </div></div>
         </div>`);
 
       // serie
       const serieRes = await fetch(
-        `/api/serie_indicador_dni?dni=${dni}` +
-        `&indicador_id=${t.indicador_id}` +
-        `&from=2024-01-01&to=2050-01-01`
+        `/api/empleados/${dni}/indicadores/${t.indicador_id}/serie`
       );
       const serie = await serieRes.json();
       if (!serie?.labels?.length) continue;
 
       const ctx = document.getElementById(cid).getContext('2d');
       charts.push(new Chart(ctx, {
-        type: serie.tipo || 'bar',
+        type: serie.tipo || t.tipo_grafico || 'bar',
         data: {
           labels: serie.labels,
           datasets:[{
             label: t.indicador,
             data : serie.data,
-            borderColor: serie.color,
-            backgroundColor: serie.color,
-            fill: serie.fill,
+            borderColor: serie.color || t.color_grafico,
+            backgroundColor: serie.color || t.color_grafico,
+            fill: serie.fill ?? t.fill_grafico,
             tension:.3
+          }, {
+            label: 'Objetivo',
+            data: serie.labels.map(() => serie.objetivo),
+            borderColor: '#dc3545',
+            backgroundColor: 'transparent',
+            fill: false,
+            tension: 0,
+            pointRadius: 0,
+            borderWidth: 2,
+            borderDash: [5, 5]
           }]
         },
         options:{responsive:true,scales:{y:{beginAtZero:true}}}

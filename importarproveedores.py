@@ -24,11 +24,16 @@ def normalizar_cuit(cuit):
 # =========================
 # Configuración de la BD
 # =========================
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
 conn = mysql.connector.connect(
-    host="190.210.132.63",
-    user="ht627842_root",
-    password="Paisaje.2024*",
-    database="ht627842_personal"
+    host=os.getenv('DB_HOST', '190.210.132.63'),
+    user=os.getenv('DB_USER', 'ht627842_root'),
+    password=os.getenv('DB_PASSWORD', 'Paisaje.2024*'),
+    database=os.getenv('DB_NAME', 'ht627842_personal')
 )
 cursor = conn.cursor()
 

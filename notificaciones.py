@@ -2,8 +2,9 @@ from google.oauth2 import service_account
 import google.auth.transport.requests
 import requests
 import json
+from config import FIREBASE_SERVICE_ACCOUNT
 
-SERVICE_ACCOUNT_FILE = "firebase/service_account.json"
+SERVICE_ACCOUNT_FILE = FIREBASE_SERVICE_ACCOUNT
 PROJECT_ID = "empleadosapp-ec63a"
 
 def get_access_token():
