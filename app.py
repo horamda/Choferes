@@ -1324,8 +1324,8 @@ def avisos(dni):
             FROM avisos
             WHERE dni = %s
             ORDER BY fecha DESC
-            LIMIT 5
-        """, (dni,))
+            LIMIT 2
+            """, (dni,))
         rows = cursor.fetchall()
         avisos = [
             {
@@ -1372,7 +1372,7 @@ def avisosh(dni):
         return jsonify(avisos)
 
     except Exception as e:
-        print(f"Error en /avisos/{dni}: {e}")
+        print(f"Error en /avisosh/{dni}: {e}")
         return jsonify({'error': 'Error al consultar los avisos'}), 500
 
     finally:
@@ -4220,11 +4220,6 @@ def periodo_anterior(start: date, end: date) -> tuple[date, date]:
     prev_start = prev_end - delta + timedelta(days=1)
     return prev_start, prev_end
 
-
-
-
-from datetime import date, datetime
-from flask import request, jsonify
 
 @app.route('/api/vales/historial/<dni>', methods=['GET'])
 def historial_vales(dni):
